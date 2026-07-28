@@ -13,6 +13,14 @@ return new class extends Migration
     {
         Schema::create('branches', function (Blueprint $table) {
             $table->id();
+            $table->string('branch_code')->unique();
+            $table->string('branch_name');
+            $table->text('address')->nullable();
+            $table->string('city');
+            $table->string('phone')->nullable();
+            $table->unsignedBigInteger('manager_id')->nullable();
+            $table->integer('total_employees')->default(0);
+            $table->string('status')->default('active'); // active, inactive, under_renovation
             $table->timestamps();
         });
     }
@@ -25,3 +33,4 @@ return new class extends Migration
         Schema::dropIfExists('branches');
     }
 };
+
