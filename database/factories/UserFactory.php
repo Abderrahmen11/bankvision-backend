@@ -30,6 +30,11 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            'role' => fake()->randomElement(['admin', 'manager', 'compliance', 'analyst', 'csr', 'auditor']),
+            'branch_id' => \App\Models\Branch::inRandomOrder()->first()?->id ?? \App\Models\Branch::factory(),
+            'status' => fake()->randomElement(['pending', 'active', 'suspended']),
+            'last_login_at' => fake()->optional(0.8)->dateTimeThisYear(),
+            'phone' => fake()->phoneNumber(),
         ];
     }
 
