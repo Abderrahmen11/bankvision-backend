@@ -50,5 +50,11 @@ class DatabaseSeeder extends Seeder
 
         // 4. Seed the bank customers
         $this->call(CustomerSeeder::class);
+
+        // 5. Seed bank accounts (1–3 per customer)
+        $this->call(AccountSeeder::class);
+
+        // 6. Seed transactions (8–12 per account → 500+ records)
+        $this->call(TransactionSeeder::class);
     }
 }
