@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends Model
 {
@@ -44,5 +45,13 @@ class Customer extends Model
     public function relationshipManager(): BelongsTo
     {
         return $this->belongsTo(User::class, 'relationship_manager_id');
+    }
+
+    /**
+     * Get all bank accounts belonging to this customer.
+     */
+    public function accounts(): HasMany
+    {
+        return $this->hasMany(Account::class);
     }
 }
