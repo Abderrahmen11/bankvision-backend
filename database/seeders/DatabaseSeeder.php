@@ -56,5 +56,8 @@ class DatabaseSeeder extends Seeder
 
         // 6. Seed transactions (8–12 per account → 500+ records)
         $this->call(TransactionSeeder::class);
+
+        // 7. Seed customer loans (40 records: 35 random + 5 high-risk)
+        $this->call(LoanSeeder::class);
     }
 }
