@@ -54,4 +54,12 @@ class Customer extends Model
     {
         return $this->hasMany(Account::class);
     }
+
+    /**
+     * Get all loans belonging to this customer.
+     */
+    public function loans(): HasMany
+    {
+        return $this->hasMany(Loan::class);
+    }
 }
