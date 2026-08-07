@@ -35,7 +35,7 @@ class Branch extends Model
      */
     public function users(): HasMany
     {
-        return $this->hasMany(User::class);
+        return $this->hasMany(User::class, 'branch_id');
     }
 
     /**
@@ -43,6 +43,6 @@ class Branch extends Model
      */
     public function customers(): HasMany
     {
-        return $this->hasMany(Customer::class);
+        return $this->hasMany(Customer::class, 'branch_id');
     }
 }
