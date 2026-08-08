@@ -68,4 +68,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Customer::class, 'relationship_manager_id');
     }
+
+    /**
+     * Get all audit logs for actions performed by this user.
+     */
+    public function auditLogs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AuditLog::class);
+    }
 }
