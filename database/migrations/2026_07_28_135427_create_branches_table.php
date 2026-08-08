@@ -18,7 +18,6 @@ return new class extends Migration {
             $table->string('city');
             $table->string('phone')->nullable();
             $table->unsignedBigInteger('manager_id')->nullable();
-            $table->integer('total_employees')->default(0);
             $table->string('status')->default('active'); // active, inactive, under_renovation
             $table->timestamps();
         });

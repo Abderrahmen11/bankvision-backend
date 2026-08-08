@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
             $table->string('transaction_number')->unique();
-            $table->foreignId('account_id')->constrained('accounts')->cascadeOnDelete();
+            $table->foreignId('account_id')->constrained('accounts')->restrictOnDelete();
             $table->string('transaction_type'); // deposit, withdrawal, transfer, wire
             $table->decimal('amount', 15, 2);
             $table->string('currency', 3)->default('USD');
