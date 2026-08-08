@@ -63,8 +63,13 @@ class AuditLogFactory extends Factory
             $newValues = ['status' => 'rejected', 'reason' => 'Compliance check failure'];
         }
 
+        // 10% chance of system/deleted user action (user_id = null)
+        $userId = $this->faker->boolean(90)
+            ? (User::inRandomOrder()->first()?->id ?? User::factory())
+            : null;
+
         return [
-            'user_id'    => User::inRandomOrder()->first()?->id ?? User::factory(),
+            'user_id'    => $userId,
             'action'     => $action,
             'table_name' => $tableName,
             'record_id'  => $recordId,
