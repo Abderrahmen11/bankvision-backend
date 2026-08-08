@@ -24,7 +24,6 @@ class BranchFactory extends Factory
             'city' => $this->faker->city(),
             'phone' => $this->faker->phoneNumber(),
             'manager_id' => null, // Left null to avoid infinite loop with users seeder; we seed it afterwards
-            'total_employees' => $this->faker->numberBetween(3, 30),
             'status' => $this->faker->randomElement(['active', 'inactive', 'under_renovation']),
         ];
     }

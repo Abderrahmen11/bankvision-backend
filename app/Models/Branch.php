@@ -18,7 +18,6 @@ class Branch extends Model
         'city',
         'phone',
         'manager_id',
-        'total_employees',
         'status',
     ];
 
@@ -35,7 +34,7 @@ class Branch extends Model
      */
     public function users(): HasMany
     {
-        return $this->hasMany(User::class, 'branch_id');
+        return $this->hasMany(User::class);
     }
 
     /**
@@ -43,6 +42,6 @@ class Branch extends Model
      */
     public function customers(): HasMany
     {
-        return $this->hasMany(Customer::class, 'branch_id');
+        return $this->hasMany(Customer::class);
     }
 }
