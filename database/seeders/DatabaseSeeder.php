@@ -62,5 +62,8 @@ class DatabaseSeeder extends Seeder
 
         // 8. Seed alerts (33+ records)
         $this->call(AlertSeeder::class);
+
+        // 9. Seed audit logs (120+ entries across employees)
+        $this->call(AuditLogSeeder::class);
     }
 }
