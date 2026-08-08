@@ -76,4 +76,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(AuditLog::class);
     }
+
+    /**
+     * Get the custom drag & drop dashboard layout preference for this user.
+     */
+    public function dashboardLayout(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(DashboardLayout::class);
+    }
 }
