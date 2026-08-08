@@ -59,5 +59,8 @@ class DatabaseSeeder extends Seeder
 
         // 7. Seed customer loans (40 records: 35 random + 5 high-risk)
         $this->call(LoanSeeder::class);
+
+        // 8. Seed alerts (33+ records)
+        $this->call(AlertSeeder::class);
     }
 }
