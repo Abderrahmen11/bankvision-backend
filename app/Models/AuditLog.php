@@ -32,6 +32,10 @@ class AuditLog extends Model
      */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withDefault([
+            'name' => 'System / Deleted User',
+            'email' => 'system@bankvision.com',
+            'role' => 'system',
+        ]);
     }
 }
