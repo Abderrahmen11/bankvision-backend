@@ -36,5 +36,14 @@ class AuditLogSeeder extends Seeder
             'table_name' => 'transactions',
             'new_values' => ['status' => 'approved', 'amount' => 150000.00, 'flag' => 'high_value_override'],
         ]);
+
+        // Add 5 audit logs representing deleted users or system-automated actions
+        AuditLog::factory()->count(5)->create([
+            'user_id'    => null,
+            'action'     => 'delete',
+            'table_name' => 'users',
+            'old_values' => ['name' => 'Terminated Employee', 'role' => 'csr'],
+            'new_values' => ['status' => 'deactivated_and_deleted'],
+        ]);
     }
 }
