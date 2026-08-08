@@ -65,5 +65,8 @@ class DatabaseSeeder extends Seeder
 
         // 9. Seed audit logs (120+ entries across employees)
         $this->call(AuditLogSeeder::class);
+
+        // 10. Seed drag & drop dashboard layouts for all users (role-tailored)
+        $this->call(DashboardLayoutSeeder::class);
     }
 }
