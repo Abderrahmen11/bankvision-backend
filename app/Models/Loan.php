@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Loan extends Model
 {
@@ -40,5 +41,13 @@ class Loan extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * Get all security and compliance alerts associated with this loan.
+     */
+    public function alerts(): MorphMany
+    {
+        return $this->morphMany(Alert::class, 'alertable');
     }
 }
