@@ -78,7 +78,7 @@ class DashboardLayoutSeeder extends Seeder
                 ['user_id' => $user->id],
                 [
                     'layout_data' => $layoutData,
-                    'is_default' => false,
+                    'is_default' => true,
                 ]
             );
         });
