@@ -83,7 +83,7 @@ class AuthController extends Controller
     {
         return response()->json([
             'success' => true,
-            'user'    => $request->user()->load('branch'),
+            'user' => $request->user()->load('branch'),
         ], 200);
     }
 }
