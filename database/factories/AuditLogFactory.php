@@ -34,7 +34,17 @@ class AuditLogFactory extends Factory
             default => $this->faker->randomElement(['customers', 'accounts', 'transactions', 'loans', 'alerts', 'users']),
         };
 
-        $recordId = $this->faker->numberBetween(1, 100);
+        $modelMap = [
+            'users'        => \App\Models\User::class,
+            'customers'    => \App\Models\Customer::class,
+            'accounts'     => \App\Models\Account::class,
+            'transactions' => \App\Models\Transaction::class,
+            'loans'        => \App\Models\Loan::class,
+            'alerts'       => \App\Models\Alert::class,
+        ];
+
+        $modelClass = $modelMap[$tableName] ?? \App\Models\User::class;
+        $recordId   = $modelClass::inRandomOrder()->first()?->id ?? $modelClass::factory()->create()->id;
 
         // Generate contextual old_values and new_values JSON arrays based on action
         $oldValues = null;
