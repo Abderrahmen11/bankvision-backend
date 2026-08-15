@@ -63,10 +63,12 @@ class LoanFactory extends Factory
             $status = $this->faker->randomElement(['active', 'active', 'active', 'delinquent']);
         }
 
-        // Next payment is the 1st of next month (null if completed/defaulted)
-        $nextPaymentDate = in_array($status, ['active', 'delinquent'])
-            ? Carbon::now()->addMonth()->startOfMonth()
-            : null;
+        // Next payment is next month for active, overdue past date for delinquent, and null for completed/defaulted
+        $nextPaymentDate = match ($status) {
+            'active'     => Carbon::now()->addMonth()->startOfMonth(),
+            'delinquent' => Carbon::now()->subDays(rand(5, 45)),
+            default      => null, // completed, defaulted
+        };
 
         $year = $startDate->format('Y');
 
