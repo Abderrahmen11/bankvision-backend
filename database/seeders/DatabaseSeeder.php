@@ -43,8 +43,10 @@ class DatabaseSeeder extends Seeder
         }
 
         foreach ($branches as $branch) {
+            $manager = $managers->random();
+            $manager->update(['branch_id' => $branch->id]);
             $branch->update([
-                'manager_id' => $managers->random()->id,
+                'manager_id' => $manager->id,
             ]);
         }
 
