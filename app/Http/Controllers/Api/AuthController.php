@@ -16,21 +16,29 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([
-            'email'    => ['required', 'email'],
+            'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
 
         $user = User::where('email', $credentials['email'])->first();
 
-        // 1. Verify user existence & password check
-        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+        // 1. Verify user existence
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid email or password.',
+                'message' => 'No account found with this email address.',
+            ], 404);
+        }
+
+        // 2. Verify password check
+        if (!Hash::check($credentials['password'], $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Incorrect password.',
             ], 401);
         }
 
-        // 2. Check active user status
+        // 3. Check active user status
         if ($user->status !== 'active') {
             return response()->json([
                 'success' => false,
@@ -50,8 +58,8 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Authenticated successfully.',
-            'token'   => $token,
-            'user'    => $user,
+            'token' => $token,
+            'user' => $user,
         ], 200);
     }
 
