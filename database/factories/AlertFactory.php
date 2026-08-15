@@ -63,14 +63,15 @@ class AlertFactory extends Factory
             ]),
         };
 
-        // Randomly pick a polymorphic subject from available entities
-        $subjects = [
-            [Customer::class,    Customer::inRandomOrder()->first()?->id],
-            [Account::class,     Account::inRandomOrder()->first()?->id],
-            [Transaction::class, Transaction::inRandomOrder()->first()?->id],
-            [Loan::class,        Loan::inRandomOrder()->first()?->id],
+        // Map alert_type directly to appropriate polymorphic target entity
+        $targetMap = [
+            'suspicious_transaction' => [Transaction::class, fn() => Transaction::inRandomOrder()->first()?->id ?? Transaction::factory()],
+            'kyc_expiring'           => [Customer::class,    fn() => Customer::inRandomOrder()->first()?->id ?? Customer::factory()],
+            'login_attempt'          => [Customer::class,    fn() => Customer::inRandomOrder()->first()?->id ?? Customer::factory()],
+            'loan_delinquent'        => [Loan::class,        fn() => Loan::inRandomOrder()->first()?->id ?? Loan::factory()],
         ];
-        $subject = $this->faker->randomElement($subjects);
+
+        $target = $targetMap[$type];
 
         $status = $this->faker->randomElement([
             'open', 'open', 'open',  // 3/5 open (most alerts unresolved)
@@ -93,8 +94,8 @@ class AlertFactory extends Factory
             'resolved_at'    => $resolvedAt,
             'status'         => $status,
             'assigned_to'    => User::inRandomOrder()->first()?->id,
-            'alertable_type' => $subject[0],
-            'alertable_id'   => $subject[1],
+            'alertable_type' => $target[0],
+            'alertable_id'   => call_user_func($target[1]),
         ];
     }
 }
