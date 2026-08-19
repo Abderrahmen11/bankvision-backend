@@ -69,7 +69,10 @@ class CustomerController extends Controller
             'relationship_manager_id' => ['nullable', 'exists:users,id'],
         ]);
 
-        $validated['customer_number'] = 'CUST-' . date('Y') . '-' . rand(10000, 99999);
+        $validated['customer_number']  = 'CUST-' . date('Y') . '-' . rand(10000, 99999);
+        $validated['registration_date'] = $validated['registration_date'] ?? date('Y-m-d');
+        $validated['kyc_status']        = $validated['kyc_status'] ?? 'pending';
+        $validated['risk_level']        = $validated['risk_level'] ?? 'low';
 
         $customer = Customer::create($validated);
 
