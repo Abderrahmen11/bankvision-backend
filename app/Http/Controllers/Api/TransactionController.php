@@ -94,13 +94,34 @@ class TransactionController extends Controller
 
     /**
      * Flag a transaction as suspicious for compliance review.
+     * Generates a high-severity compliance Alert automatically.
      */
     public function flag(string $id): JsonResponse
     {
-        $transaction = Transaction::where('status', 'completed')
+        $transaction = Transaction::whereIn('status', ['completed', 'pending'])
             ->findOrFail($id);
 
-        $transaction->update(['status' => 'flagged']);
+        DB::transaction(function () use ($transaction) {
+            $transaction->update(['status' => 'flagged']);
+
+            // Create compliance Alert if not already existing
+            $existingAlert = Alert::where('alertable_type', Transaction::class)
+                ->where('alertable_id', $transaction->id)
+                ->where('status', '!=', 'resolved')
+                ->first();
+
+            if (!$existingAlert) {
+                Alert::create([
+                    'alert_number'   => 'ALT-' . date('Y') . '-' . rand(10000, 99999),
+                    'alert_type'     => 'suspicious_transaction',
+                    'severity'       => 'high',
+                    'description'    => 'Suspicious transaction ' . $transaction->transaction_number . ' flagged for compliance investigation.',
+                    'status'         => 'open',
+                    'alertable_type' => Transaction::class,
+                    'alertable_id'   => $transaction->id,
+                ]);
+            }
+        });
 
         return response()->json([
             'success' => true,

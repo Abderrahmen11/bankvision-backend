@@ -42,11 +42,11 @@ class AlertController extends Controller
     }
 
     /**
-     * Resolve an open alert, recording the resolution timestamp.
+     * Resolve an open or in-progress alert, recording the resolution timestamp.
      */
     public function resolve(string $id): JsonResponse
     {
-        $alert = Alert::where('status', 'open')
+        $alert = Alert::whereIn('status', ['open', 'in-progress'])
             ->findOrFail($id);
 
         $alert->update([
@@ -63,6 +63,7 @@ class AlertController extends Controller
 
     /**
      * Assign an alert to a specific bank employee for investigation.
+     * Advances status from 'open' to 'in-progress'.
      */
     public function assign(Request $request, string $id): JsonResponse
     {
@@ -72,7 +73,12 @@ class AlertController extends Controller
             'user_id' => ['required', 'exists:users,id'],
         ]);
 
-        $alert->update(['assigned_to' => $validated['user_id']]);
+        $status = $alert->status === 'open' ? 'in-progress' : $alert->status;
+
+        $alert->update([
+            'assigned_to' => $validated['user_id'],
+            'status'      => $status,
+        ]);
 
         return response()->json([
             'success' => true,

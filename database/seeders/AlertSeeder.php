@@ -22,6 +22,11 @@ class AlertSeeder extends Seeder
         $flaggedTransactions = Transaction::where('status', 'flagged')
             ->inRandomOrder()->take(5)->get();
 
+        if ($flaggedTransactions->isEmpty()) {
+            $flaggedTransactions = Transaction::inRandomOrder()->take(5)->get();
+            $flaggedTransactions->each->update(['status' => 'flagged']);
+        }
+
         foreach ($flaggedTransactions as $transaction) {
             Alert::factory()->create([
                 'alert_type'     => 'suspicious_transaction',

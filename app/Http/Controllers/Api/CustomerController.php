@@ -111,10 +111,29 @@ class CustomerController extends Controller
 
     /**
      * Delete a customer record.
+     * Prevents deletion if customer has active accounts holding positive balances or outstanding loans.
      */
     public function destroy(string $id): JsonResponse
     {
         $customer = Customer::findOrFail($id);
+
+        $hasActiveAccounts = $customer->accounts()
+            ->where('status', 'active')
+            ->where('balance', '>', 0)
+            ->exists();
+
+        $hasActiveLoans = $customer->loans()
+            ->whereIn('status', ['active', 'delinquent'])
+            ->where('outstanding_balance', '>', 0)
+            ->exists();
+
+        if ($hasActiveAccounts || $hasActiveLoans) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete a customer with active accounts holding funds or outstanding loans.',
+            ], 422);
+        }
+
         $customer->delete();
 
         return response()->json([
