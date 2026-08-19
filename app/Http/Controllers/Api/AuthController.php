@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,7 +60,7 @@ class AuthController extends Controller
             'success' => true,
             'message' => 'Authenticated successfully.',
             'token' => $token,
-            'user' => $user,
+            'user' => UserResource::make($user),
         ], 200);
     }
 
@@ -68,7 +69,7 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $request->user()?->currentAccessToken()?->delete();
 
         return response()->json([
             'success' => true,
@@ -83,7 +84,7 @@ class AuthController extends Controller
     {
         return response()->json([
             'success' => true,
-            'user' => $request->user()->load('branch'),
+            'user' => UserResource::make($request->user()->load('branch')),
         ], 200);
     }
 }
