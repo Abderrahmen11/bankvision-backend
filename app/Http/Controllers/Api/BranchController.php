@@ -19,6 +19,7 @@ class BranchController extends Controller
     {
         $branches = Branch::query()
             ->with('manager')
+            ->withCount('users as total_employees')
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->when($request->city, fn($q) => $q->where('city', 'like', "%{$request->city}%"))
             ->when(
@@ -42,6 +43,7 @@ class BranchController extends Controller
     public function show(string $id): BranchResource
     {
         $branch = Branch::with('manager')
+            ->withCount('users as total_employees')
             ->findOrFail($id);
 
         return BranchResource::make($branch);
