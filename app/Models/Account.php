@@ -53,4 +53,20 @@ class Account extends Model
     {
         return $this->morphMany(Alert::class, 'alertable');
     }
+
+    /**
+     * Check if account is active and permitted to process transactions.
+     */
+    public function canTransact(): bool
+    {
+        return $this->status === 'active';
+    }
+
+    /**
+     * Check if account balance is sufficient for debit without going negative.
+     */
+    public function hasSufficientBalance(float $amount): bool
+    {
+        return ((float) $this->balance) >= $amount;
+    }
 }

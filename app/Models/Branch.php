@@ -44,4 +44,12 @@ class Branch extends Model
     {
         return $this->hasMany(Customer::class);
     }
+
+    /**
+     * Get the total number of employees assigned to this branch.
+     */
+    public function getTotalEmployeesAttribute(): int
+    {
+        return $this->users_count ?? $this->users()->count();
+    }
 }
