@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TransactionResource;
+use App\Models\Account;
+use App\Models\Alert;
 use App\Models\Transaction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class TransactionController extends Controller
 {
@@ -43,7 +46,8 @@ class TransactionController extends Controller
     }
 
     /**
-     * Record a new transaction (deposit, withdrawal, or transfer).
+     * Record a new transaction (deposit, withdrawal, transfer, wire).
+     * Enforces balance verification, negative balance protection, and account status check.
      */
     public function store(Request $request): JsonResponse
     {
@@ -55,13 +59,50 @@ class TransactionController extends Controller
             'description'      => ['nullable', 'string'],
             'channel'          => ['sometimes', 'in:online,branch,atm,mobile'],
             'counterparty'     => ['nullable', 'string', 'max:255'],
+            'status'           => ['sometimes', 'in:completed,pending'],
         ]);
+
+        $account = Account::findOrFail($validated['account_id']);
+
+        // 1. Account status validation
+        if (!$account->canTransact()) {
+            return response()->json([
+                'success' => false,
+                'message' => "Cannot process transactions on {$account->status} account.",
+            ], 422);
+        }
+
+        $amount = (float) $validated['amount'];
+        $type   = $validated['transaction_type'];
+        $status = $validated['status'] ?? 'completed';
+
+        // 2. Balance validation: balance must never become negative
+        $isDebit = in_array($type, ['withdrawal', 'transfer', 'wire'], true);
+        if ($isDebit && !$account->hasSufficientBalance($amount)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Insufficient funds. Account balance cannot be negative.',
+            ], 422);
+        }
 
         $validated['transaction_number'] = 'TXN-' . date('Y') . '-' . rand(100000, 999999);
         $validated['transaction_date']   = now();
-        $validated['status']             = 'completed';
+        $validated['currency']           = $validated['currency'] ?? $account->currency;
+        $validated['channel']            = $validated['channel'] ?? 'online';
+        $validated['status']             = $status;
 
-        $transaction = Transaction::create($validated);
+        $transaction = DB::transaction(function () use ($account, $validated, $isDebit, $amount, $status) {
+            // Apply balance update if transaction is completed immediately
+            if ($status === 'completed') {
+                if ($isDebit) {
+                    $account->decrement('balance', $amount);
+                } else {
+                    $account->increment('balance', $amount);
+                }
+            }
+
+            return Transaction::create($validated);
+        });
 
         return response()->json([
             'success' => true,
@@ -71,19 +112,52 @@ class TransactionController extends Controller
     }
 
     /**
-     * Approve a flagged transaction.
+     * Approve a pending or flagged transaction.
      * Sets status to 'completed' and records the approver and timestamp.
      */
     public function approve(Request $request, string $id): JsonResponse
     {
-        $transaction = Transaction::where('status', 'flagged')
+        $transaction = Transaction::with('account')
+            ->whereIn('status', ['flagged', 'pending'])
             ->findOrFail($id);
 
-        $transaction->update([
-            'status'      => 'completed',
-            'approved_by' => $request->user()->id,
-            'approved_at' => now(),
-        ]);
+        $account = $transaction->account;
+        $amount  = (float) $transaction->amount;
+        $isDebit = in_array($transaction->transaction_type, ['withdrawal', 'transfer', 'wire'], true);
+
+        // If previously pending (balance not yet adjusted) or re-verifying debit
+        if ($transaction->status === 'pending') {
+            if (!$account->canTransact()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cannot approve transaction on {$account->status} account.",
+                ], 422);
+            }
+
+            if ($isDebit && !$account->hasSufficientBalance($amount)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Insufficient funds to complete this pending transaction.',
+                ], 422);
+            }
+        }
+
+        DB::transaction(function () use ($transaction, $account, $isDebit, $amount, $request) {
+            // If it was pending, now apply to balance
+            if ($transaction->status === 'pending') {
+                if ($isDebit) {
+                    $account->decrement('balance', $amount);
+                } else {
+                    $account->increment('balance', $amount);
+                }
+            }
+
+            $transaction->update([
+                'status'      => 'completed',
+                'approved_by' => $request->user()?->id,
+                'approved_at' => now(),
+            ]);
+        });
 
         return response()->json([
             'success' => true,
