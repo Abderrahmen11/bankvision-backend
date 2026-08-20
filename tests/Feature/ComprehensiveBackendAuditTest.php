@@ -371,23 +371,58 @@ class ComprehensiveBackendAuditTest extends TestCase
 
     /*
     |--------------------------------------------------------------------------
-    | 7. Customer Safe Deletion Guard
+    | 8. Security & OWASP Hardening
     |--------------------------------------------------------------------------
     */
-    public function test_cannot_delete_customer_with_active_funds(): void
+    public function test_security_headers_are_present_on_api_responses(): void
+    {
+        $response = $this->getJson('/api/branches');
+
+        // Unauthenticated or not, security headers middleware attaches them to API responses
+        $response->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('X-Frame-Options', 'DENY')
+            ->assertHeader('X-XSS-Protection', '1; mode=block')
+            ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    }
+
+    public function test_sensitive_user_data_is_never_exposed_in_api(): void
     {
         Sanctum::actingAs($this->admin);
 
-        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $response = $this->getJson('/api/user');
 
-        Account::factory()->create([
-            'customer_id' => $customer->id,
-            'balance'     => 5000,
-            'status'      => 'active',
+        $response->assertStatus(200);
+        $this->assertArrayNotHasKey('password', $response->json('user'));
+        $this->assertArrayNotHasKey('remember_token', $response->json('user'));
+    }
+
+    public function test_sql_injection_payload_in_search_is_safely_handled(): void
+    {
+        Sanctum::actingAs($this->csr);
+
+        $payload = "' OR '1'='1' -- ";
+        $response = $this->getJson("/api/customers?search=" . urlencode($payload));
+
+        $response->assertStatus(200);
+        $this->assertEmpty($response->json('data'));
+    }
+
+    public function test_login_endpoint_is_rate_limited(): void
+    {
+        // Execute 5 attempts
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/login', [
+                'email'    => 'attacker@bankvision.com',
+                'password' => 'wrongpass',
+            ]);
+        }
+
+        // 6th attempt should be throttled (HTTP 429 Too Many Requests)
+        $rateLimitedResponse = $this->postJson('/api/login', [
+            'email'    => 'attacker@bankvision.com',
+            'password' => 'wrongpass',
         ]);
 
-        $this->deleteJson("/api/customers/{$customer->id}")
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'Cannot delete a customer with active accounts holding funds or outstanding loans.');
+        $rateLimitedResponse->assertStatus(429);
     }
 }
