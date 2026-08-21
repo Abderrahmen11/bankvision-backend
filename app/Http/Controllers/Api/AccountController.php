@@ -6,43 +6,41 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\TransactionResource;
 use App\Models\Account;
+use App\Services\AccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class AccountController extends Controller
 {
+    public function __construct(
+        protected AccountService $accountService
+    ) {}
+
     /**
      * List accounts with optional filters.
-     * Filters: customer_id, type, status, currency
      */
     public function index(Request $request): AnonymousResourceCollection
     {
-        $accounts = Account::query()
-            ->with('customer')
-            ->when($request->customer_id, fn ($q) => $q->where('customer_id', $request->customer_id))
-            ->when($request->type,        fn ($q) => $q->where('account_type', $request->type))
-            ->when($request->status,      fn ($q) => $q->where('status', $request->status))
-            ->when($request->currency,    fn ($q) => $q->where('currency', $request->currency))
-            ->latest()
-            ->paginate(15);
+        $accounts = $this->accountService->getPaginatedAccounts(
+            $request->only(['customer_id', 'type', 'status', 'currency'])
+        );
 
         return AccountResource::collection($accounts);
     }
 
     /**
-     * Show a single account with its customer details.
+     * Show a single account.
      */
     public function show(string $id): AccountResource
     {
-        $account = Account::with('customer')
-            ->findOrFail($id);
+        $account = $this->accountService->getAccountDetails($id);
 
         return AccountResource::make($account);
     }
 
     /**
-     * Open a new bank account for a customer.
+     * Open a new bank account.
      */
     public function store(Request $request): JsonResponse
     {
@@ -55,21 +53,17 @@ class AccountController extends Controller
             'opened_date'   => ['sometimes', 'date'],
         ]);
 
-        $validated['account_number'] = 'ACC-' . date('Y') . '-' . rand(10000, 99999);
-        $validated['opened_date']    = $validated['opened_date'] ?? date('Y-m-d');
-        $validated['status']         = 'active';
-
-        $account = Account::create($validated);
+        $account = $this->accountService->openAccount($validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Account opened successfully.',
-            'data'    => AccountResource::make($account->load('customer')),
+            'data'    => AccountResource::make($account),
         ], 201);
     }
 
     /**
-     * Update account details (status, interest rate, etc).
+     * Update account details.
      */
     public function update(Request $request, string $id): JsonResponse
     {
@@ -80,22 +74,22 @@ class AccountController extends Controller
             'interest_rate' => ['sometimes', 'numeric', 'min:0'],
         ]);
 
-        $account->update($validated);
+        $updated = $this->accountService->updateAccount($account, $validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Account updated successfully.',
-            'data'    => AccountResource::make($account->fresh('customer')),
+            'data'    => AccountResource::make($updated),
         ]);
     }
 
     /**
-     * Close an account (sets status to closed).
+     * Close an account.
      */
     public function destroy(string $id): JsonResponse
     {
         $account = Account::findOrFail($id);
-        $account->update(['status' => 'closed']);
+        $this->accountService->closeAccount($account);
 
         return response()->json([
             'success' => true,
@@ -105,20 +99,14 @@ class AccountController extends Controller
 
     /**
      * List all transactions for a specific account.
-     * Filters: type, status, date_from, date_to
      */
     public function transactions(Request $request, string $id): AnonymousResourceCollection
     {
         $account = Account::findOrFail($id);
-
-        $transactions = $account->transactions()
-            ->with('approver')
-            ->when($request->type,      fn ($q) => $q->where('transaction_type', $request->type))
-            ->when($request->status,    fn ($q) => $q->where('status', $request->status))
-            ->when($request->date_from, fn ($q) => $q->whereDate('transaction_date', '>=', $request->date_from))
-            ->when($request->date_to,   fn ($q) => $q->whereDate('transaction_date', '<=', $request->date_to))
-            ->latest('transaction_date')
-            ->paginate(15);
+        $transactions = $this->accountService->getAccountTransactions(
+            $account,
+            $request->only(['type', 'status', 'date_from', 'date_to'])
+        );
 
         return TransactionResource::collection($transactions);
     }
