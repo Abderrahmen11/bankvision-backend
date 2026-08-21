@@ -50,4 +50,39 @@ class Loan extends Model
     {
         return $this->morphMany(Alert::class, 'alertable');
     }
+
+    /**
+     * Scope query to pending loans.
+     */
+    public function scopePending(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', 'pending');
+    }
+
+    /**
+     * Scope query to active loans.
+     */
+    public function scopeActive(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', 'active');
+    }
+
+    /**
+     * Scope query to delinquent loans.
+     */
+    public function scopeDelinquent(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', 'delinquent');
+    }
+
+    /**
+     * Scope query to apply multiple attribute filters.
+     */
+    public function scopeFilter(\Illuminate\Database\Eloquent\Builder $query, array $filters): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query
+            ->when($filters['customer_id'] ?? null, fn ($q, $c) => $q->where('customer_id', $c))
+            ->when($filters['type'] ?? null,        fn ($q, $t) => $q->where('loan_type', $t))
+            ->when($filters['status'] ?? null,      fn ($q, $s) => $q->where('status', $s));
+    }
 }
