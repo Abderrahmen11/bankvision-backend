@@ -5,46 +5,35 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BranchResource;
 use App\Models\Branch;
+use App\Services\BranchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class BranchController extends Controller
 {
+    public function __construct(
+        protected BranchService $branchService
+    ) {}
+
     /**
-     * List all branches with optional search.
-     * Filters: status, city
+     * List all branches with search and filters.
      */
     public function index(Request $request): AnonymousResourceCollection
     {
-        $branches = Branch::query()
-            ->with('manager')
-            ->withCount('users as total_employees')
-            ->when($request->status, fn($q) => $q->where('status', $request->status))
-            ->when($request->city, fn($q) => $q->where('city', 'like', "%{$request->city}%"))
-            ->when(
-                $request->search,
-                fn($q) =>
-                $q->where(
-                    fn($q) =>
-                    $q->where('branch_name', 'like', "%{$request->search}%")
-                        ->orWhere('branch_code', 'like', "%{$request->search}%")
-                )
-            )
-            ->latest()
-            ->paginate(15);
+        $branches = $this->branchService->getPaginatedBranches(
+            $request->only(['search', 'status', 'city'])
+        );
 
         return BranchResource::collection($branches);
     }
 
     /**
-     * Show a single branch with manager and employee/customer counts.
+     * Show a single branch with manager.
      */
     public function show(string $id): BranchResource
     {
-        $branch = Branch::with('manager')
-            ->withCount('users as total_employees')
-            ->findOrFail($id);
+        $branch = $this->branchService->getBranchDetails($id);
 
         return BranchResource::make($branch);
     }
@@ -64,12 +53,12 @@ class BranchController extends Controller
             'manager_id'  => ['nullable', 'exists:users,id'],
         ]);
 
-        $branch = Branch::create($validated);
+        $branch = $this->branchService->createBranch($validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Branch created successfully.',
-            'data'    => BranchResource::make($branch->load('manager')),
+            'data'    => BranchResource::make($branch),
         ], 201);
     }
 
@@ -89,12 +78,12 @@ class BranchController extends Controller
             'manager_id'  => ['nullable', 'exists:users,id'],
         ]);
 
-        $branch->update($validated);
+        $updated = $this->branchService->updateBranch($branch, $validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Branch updated successfully.',
-            'data' => BranchResource::make($branch->fresh('manager')),
+            'data'    => BranchResource::make($updated),
         ]);
     }
 
@@ -104,15 +93,7 @@ class BranchController extends Controller
     public function destroy(string $id): JsonResponse
     {
         $branch = Branch::findOrFail($id);
-
-        if ($branch->users()->exists() || $branch->customers()->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot delete a branch that has assigned employees or customers.',
-            ], 422);
-        }
-
-        $branch->delete();
+        $this->branchService->deleteBranch($branch);
 
         return response()->json([
             'success' => true,
