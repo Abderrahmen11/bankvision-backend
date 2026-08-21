@@ -71,4 +71,30 @@ class Customer extends Model
     {
         return $this->morphMany(Alert::class, 'alertable');
     }
+
+    /**
+     * Scope query to search by name, email, or customer number.
+     */
+    public function scopeSearch(\Illuminate\Database\Eloquent\Builder $query, ?string $search): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->when($search, fn ($q) =>
+            $q->where(fn ($q) =>
+                $q->where('full_name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('customer_number', 'like', "%{$search}%")
+            )
+        );
+    }
+
+    /**
+     * Scope query to apply multiple attribute filters.
+     */
+    public function scopeFilter(\Illuminate\Database\Eloquent\Builder $query, array $filters): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query
+            ->search($filters['search'] ?? null)
+            ->when($filters['type'] ?? null, fn ($q, $t) => $q->where('customer_type', $t))
+            ->when($filters['kyc_status'] ?? null, fn ($q, $k) => $q->where('kyc_status', $k))
+            ->when($filters['risk_level'] ?? null, fn ($q, $r) => $q->where('risk_level', $r));
+    }
 }
