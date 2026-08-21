@@ -3,49 +3,39 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\CustomerResource;
 use App\Http\Resources\AccountResource;
+use App\Http\Resources\CustomerResource;
 use App\Http\Resources\LoanResource;
 use App\Models\Customer;
+use App\Services\CustomerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class CustomerController extends Controller
 {
+    public function __construct(
+        protected CustomerService $customerService
+    ) {}
+
     /**
-     * List customers with optional search and filters.
-     * Filters: search (name/email/number), type, kyc_status, risk_level
+     * List customers with search and filters.
      */
     public function index(Request $request): AnonymousResourceCollection
     {
-        $customers = Customer::query()
-            ->with(['branch', 'relationshipManager'])
-            ->withCount(['accounts', 'loans'])
-            ->when($request->search, fn ($q) =>
-                $q->where(fn ($q) =>
-                    $q->where('full_name', 'like', "%{$request->search}%")
-                      ->orWhere('email', 'like', "%{$request->search}%")
-                      ->orWhere('customer_number', 'like', "%{$request->search}%")
-                )
-            )
-            ->when($request->type,       fn ($q) => $q->where('customer_type', $request->type))
-            ->when($request->kyc_status, fn ($q) => $q->where('kyc_status', $request->kyc_status))
-            ->when($request->risk_level, fn ($q) => $q->where('risk_level', $request->risk_level))
-            ->latest()
-            ->paginate(15);
+        $customers = $this->customerService->getPaginatedCustomers(
+            $request->only(['search', 'type', 'kyc_status', 'risk_level'])
+        );
 
         return CustomerResource::collection($customers);
     }
 
     /**
-     * Show a single customer with accounts, loans, branch, and manager.
+     * Show a single customer with details.
      */
     public function show(string $id): CustomerResource
     {
-        $customer = Customer::with(['branch', 'relationshipManager'])
-            ->withCount(['accounts', 'loans'])
-            ->findOrFail($id);
+        $customer = $this->customerService->getCustomerDetails($id);
 
         return CustomerResource::make($customer);
     }
@@ -69,22 +59,17 @@ class CustomerController extends Controller
             'relationship_manager_id' => ['nullable', 'exists:users,id'],
         ]);
 
-        $validated['customer_number']  = 'CUST-' . date('Y') . '-' . rand(10000, 99999);
-        $validated['registration_date'] = $validated['registration_date'] ?? date('Y-m-d');
-        $validated['kyc_status']        = $validated['kyc_status'] ?? 'pending';
-        $validated['risk_level']        = $validated['risk_level'] ?? 'low';
-
-        $customer = Customer::create($validated);
+        $customer = $this->customerService->createCustomer($validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Customer created successfully.',
-            'data'    => CustomerResource::make($customer->load(['branch', 'relationshipManager'])),
+            'data'    => CustomerResource::make($customer),
         ], 201);
     }
 
     /**
-     * Update an existing customer's details.
+     * Update an existing customer.
      */
     public function update(Request $request, string $id): JsonResponse
     {
@@ -103,41 +88,22 @@ class CustomerController extends Controller
             'relationship_manager_id' => ['nullable', 'exists:users,id'],
         ]);
 
-        $customer->update($validated);
+        $updated = $this->customerService->updateCustomer($customer, $validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Customer updated successfully.',
-            'data'    => CustomerResource::make($customer->fresh(['branch', 'relationshipManager'])),
+            'data'    => CustomerResource::make($updated),
         ]);
     }
 
     /**
      * Delete a customer record.
-     * Prevents deletion if customer has active accounts holding positive balances or outstanding loans.
      */
     public function destroy(string $id): JsonResponse
     {
         $customer = Customer::findOrFail($id);
-
-        $hasActiveAccounts = $customer->accounts()
-            ->where('status', 'active')
-            ->where('balance', '>', 0)
-            ->exists();
-
-        $hasActiveLoans = $customer->loans()
-            ->whereIn('status', ['active', 'delinquent'])
-            ->where('outstanding_balance', '>', 0)
-            ->exists();
-
-        if ($hasActiveAccounts || $hasActiveLoans) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot delete a customer with active accounts holding funds or outstanding loans.',
-            ], 422);
-        }
-
-        $customer->delete();
+        $this->customerService->deleteCustomer($customer);
 
         return response()->json([
             'success' => true,
@@ -151,10 +117,7 @@ class CustomerController extends Controller
     public function accounts(string $id): AnonymousResourceCollection
     {
         $customer = Customer::findOrFail($id);
-
-        $accounts = $customer->accounts()
-            ->latest()
-            ->paginate(15);
+        $accounts = $this->customerService->getCustomerAccounts($customer);
 
         return AccountResource::collection($accounts);
     }
@@ -165,10 +128,7 @@ class CustomerController extends Controller
     public function loans(string $id): AnonymousResourceCollection
     {
         $customer = Customer::findOrFail($id);
-
-        $loans = $customer->loans()
-            ->latest()
-            ->paginate(15);
+        $loans = $this->customerService->getCustomerLoans($customer);
 
         return LoanResource::collection($loans);
     }
