@@ -56,4 +56,34 @@ class Transaction extends Model
     {
         return $this->morphMany(Alert::class, 'alertable');
     }
+
+    /**
+     * Scope query to completed transactions.
+     */
+    public function scopeCompleted(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', 'completed');
+    }
+
+    /**
+     * Scope query to flagged transactions.
+     */
+    public function scopeFlagged(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', 'flagged');
+    }
+
+    /**
+     * Scope query to apply multiple attribute filters.
+     */
+    public function scopeFilter(\Illuminate\Database\Eloquent\Builder $query, array $filters): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query
+            ->when($filters['account_id'] ?? null, fn ($q, $a) => $q->where('account_id', $a))
+            ->when($filters['type'] ?? null,       fn ($q, $t) => $q->where('transaction_type', $t))
+            ->when($filters['status'] ?? null,     fn ($q, $s) => $q->where('status', $s))
+            ->when($filters['channel'] ?? null,    fn ($q, $c) => $q->where('channel', $c))
+            ->when($filters['date_from'] ?? null,  fn ($q, $d) => $q->whereDate('transaction_date', '>=', $d))
+            ->when($filters['date_to'] ?? null,    fn ($q, $d) => $q->whereDate('transaction_date', '<=', $d));
+    }
 }
