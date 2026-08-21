@@ -52,4 +52,36 @@ class Branch extends Model
     {
         return $this->users_count ?? $this->users()->count();
     }
+
+    /**
+     * Scope query to active branches.
+     */
+    public function scopeActive(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', 'active');
+    }
+
+    /**
+     * Scope query to search branches by name or code.
+     */
+    public function scopeSearch(\Illuminate\Database\Eloquent\Builder $query, ?string $search): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->when($search, fn ($q) =>
+            $q->where(fn ($q) =>
+                $q->where('branch_name', 'like', "%{$search}%")
+                  ->orWhere('branch_code', 'like', "%{$search}%")
+            )
+        );
+    }
+
+    /**
+     * Scope query to apply multiple attribute filters.
+     */
+    public function scopeFilter(\Illuminate\Database\Eloquent\Builder $query, array $filters): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query
+            ->search($filters['search'] ?? null)
+            ->when($filters['status'] ?? null, fn ($q, $s) => $q->where('status', $s))
+            ->when($filters['city'] ?? null,   fn ($q, $c) => $q->where('city', 'like', "%{$c}%"));
+    }
 }
