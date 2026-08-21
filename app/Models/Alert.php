@@ -44,4 +44,32 @@ class Alert extends Model
     {
         return $this->morphTo();
     }
+
+    /**
+     * Scope query to open alerts.
+     */
+    public function scopeOpen(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', 'open');
+    }
+
+    /**
+     * Scope query to specific severity level.
+     */
+    public function scopeBySeverity(\Illuminate\Database\Eloquent\Builder $query, string $severity): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('severity', $severity);
+    }
+
+    /**
+     * Scope query to apply multiple attribute filters.
+     */
+    public function scopeFilter(\Illuminate\Database\Eloquent\Builder $query, array $filters): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query
+            ->when($filters['severity'] ?? null,    fn ($q, $s) => $q->where('severity', $s))
+            ->when($filters['status'] ?? null,      fn ($q, $s) => $q->where('status', $s))
+            ->when($filters['assigned_to'] ?? null, fn ($q, $a) => $q->where('assigned_to', $a))
+            ->when($filters['alert_type'] ?? null,  fn ($q, $t) => $q->where('alert_type', $t));
+    }
 }
