@@ -69,4 +69,24 @@ class Account extends Model
     {
         return ((float) $this->balance) >= $amount;
     }
+
+    /**
+     * Scope query to active accounts.
+     */
+    public function scopeActive(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('status', 'active');
+    }
+
+    /**
+     * Scope query to apply filters.
+     */
+    public function scopeFilter(\Illuminate\Database\Eloquent\Builder $query, array $filters): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query
+            ->when($filters['customer_id'] ?? null, fn ($q, $c) => $q->where('customer_id', $c))
+            ->when($filters['type'] ?? null,        fn ($q, $t) => $q->where('account_type', $t))
+            ->when($filters['status'] ?? null,      fn ($q, $s) => $q->where('status', $s))
+            ->when($filters['currency'] ?? null,    fn ($q, $c) => $q->where('currency', $c));
+    }
 }
