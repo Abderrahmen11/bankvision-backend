@@ -5,65 +5,56 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AlertResource;
 use App\Models\Alert;
-use App\Models\User;
+use App\Services\AlertService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class AlertController extends Controller
 {
+    public function __construct(
+        protected AlertService $alertService
+    ) {}
+
     /**
      * List alerts with optional filters.
-     * Filters: severity, status, assigned_to, alert_type
      */
     public function index(Request $request): AnonymousResourceCollection
     {
-        $alerts = Alert::query()
-            ->with(['assignedTo', 'alertable'])
-            ->when($request->severity,    fn ($q) => $q->where('severity', $request->severity))
-            ->when($request->status,      fn ($q) => $q->where('status', $request->status))
-            ->when($request->assigned_to, fn ($q) => $q->where('assigned_to', $request->assigned_to))
-            ->when($request->alert_type,  fn ($q) => $q->where('alert_type', $request->alert_type))
-            ->latest()
-            ->paginate(15);
+        $alerts = $this->alertService->getPaginatedAlerts(
+            $request->only(['severity', 'status', 'assigned_to', 'alert_type'])
+        );
 
         return AlertResource::collection($alerts);
     }
 
     /**
-     * Show a single alert with assignee and the triggering entity.
+     * Show a single alert.
      */
     public function show(string $id): AlertResource
     {
-        $alert = Alert::with(['assignedTo', 'alertable'])
-            ->findOrFail($id);
+        $alert = $this->alertService->getAlertDetails($id);
 
         return AlertResource::make($alert);
     }
 
     /**
-     * Resolve an open or in-progress alert, recording the resolution timestamp.
+     * Resolve an open alert.
      */
     public function resolve(string $id): JsonResponse
     {
-        $alert = Alert::whereIn('status', ['open', 'in-progress'])
-            ->findOrFail($id);
-
-        $alert->update([
-            'status'      => 'resolved',
-            'resolved_at' => now(),
-        ]);
+        $alert = Alert::where('status', 'open')->findOrFail($id);
+        $resolved = $this->alertService->resolveAlert($alert);
 
         return response()->json([
             'success' => true,
             'message' => 'Alert resolved successfully.',
-            'data'    => AlertResource::make($alert->fresh(['assignedTo', 'alertable'])),
+            'data'    => AlertResource::make($resolved),
         ]);
     }
 
     /**
-     * Assign an alert to a specific bank employee for investigation.
-     * Advances status from 'open' to 'in-progress'.
+     * Assign an alert to a specific bank employee.
      */
     public function assign(Request $request, string $id): JsonResponse
     {
@@ -73,17 +64,12 @@ class AlertController extends Controller
             'user_id' => ['required', 'exists:users,id'],
         ]);
 
-        $status = $alert->status === 'open' ? 'in-progress' : $alert->status;
-
-        $alert->update([
-            'assigned_to' => $validated['user_id'],
-            'status'      => $status,
-        ]);
+        $assigned = $this->alertService->assignAlert($alert, (int) $validated['user_id']);
 
         return response()->json([
             'success' => true,
             'message' => 'Alert assigned successfully.',
-            'data'    => AlertResource::make($alert->fresh(['assignedTo', 'alertable'])),
+            'data'    => AlertResource::make($assigned),
         ]);
     }
 }
