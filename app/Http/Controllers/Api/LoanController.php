@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Loan\StoreLoanRequest;
+use App\Http\Requests\Loan\UpdateLoanRequest;
 use App\Http\Resources\LoanResource;
-use App\Models\Loan;
 use App\Services\LoanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,18 +42,9 @@ class LoanController extends Controller
     /**
      * Submit a new loan application.
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreLoanRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'customer_id'      => ['required', 'exists:customers,id'],
-            'loan_type'        => ['required', 'in:mortgage,personal,auto,business'],
-            'principal_amount' => ['required', 'numeric', 'min:1'],
-            'interest_rate'    => ['required', 'numeric', 'min:0'],
-            'term_months'      => ['required', 'integer', 'min:1'],
-            'start_date'       => ['required', 'date'],
-        ]);
-
-        $loan = $this->loanService->applyForLoan($validated);
+        $loan = $this->loanService->applyForLoan($request->validated());
 
         return response()->json([
             'success' => true,
@@ -64,17 +56,9 @@ class LoanController extends Controller
     /**
      * Update loan details.
      */
-    public function update(Request $request, string $id): JsonResponse
+    public function update(UpdateLoanRequest $request, string $id): JsonResponse
     {
-        $loan = Loan::findOrFail($id);
-
-        $validated = $request->validate([
-            'outstanding_balance' => ['sometimes', 'numeric', 'min:0'],
-            'next_payment_date'   => ['sometimes', 'date'],
-            'status'              => ['sometimes', 'in:pending,active,completed,defaulted,delinquent'],
-        ]);
-
-        $updated = $this->loanService->updateLoan($loan, $validated);
+        $updated = $this->loanService->updateLoan($id, $request->validated());
 
         return response()->json([
             'success' => true,
