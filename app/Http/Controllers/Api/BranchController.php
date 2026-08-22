@@ -72,8 +72,7 @@ class BranchController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
-        $branch = Branch::findOrFail($id);
-        $this->branchService->deleteBranch($branch);
+        $this->branchService->deleteBranch($id);
 
         return response()->json([
             'success' => true,
