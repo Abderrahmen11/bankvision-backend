@@ -41,8 +41,9 @@ class BranchService
     /**
      * Update an existing branch.
      */
-    public function updateBranch(Branch $branch, array $data): Branch
+    public function updateBranch(Branch|string|int $branch, array $data): Branch
     {
+        $branch = $branch instanceof Branch ? $branch : Branch::findOrFail($branch);
         $branch->update($data);
 
         return $branch->fresh('manager');
