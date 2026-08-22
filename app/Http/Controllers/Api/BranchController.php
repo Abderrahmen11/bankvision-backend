@@ -56,20 +56,9 @@ class BranchController extends Controller
     /**
      * Update branch details.
      */
-    public function update(Request $request, string $id): JsonResponse
+    public function update(UpdateBranchRequest $request, string $id): JsonResponse
     {
-        $branch = Branch::findOrFail($id);
-
-        $validated = $request->validate([
-            'branch_name' => ['sometimes', 'string', 'max:255'],
-            'address'     => ['nullable', 'string'],
-            'city'        => ['nullable', 'string', 'max:100'],
-            'phone'       => ['nullable', 'string', 'max:20'],
-            'status'      => ['sometimes', 'in:active,inactive,under_renovation'],
-            'manager_id'  => ['nullable', 'exists:users,id'],
-        ]);
-
-        $updated = $this->branchService->updateBranch($branch, $validated);
+        $updated = $this->branchService->updateBranch($id, $request->validated());
 
         return response()->json([
             'success' => true,
