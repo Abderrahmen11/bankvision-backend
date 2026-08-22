@@ -57,8 +57,7 @@ class TransactionController extends Controller
      */
     public function approve(Request $request, string $id): JsonResponse
     {
-        $transaction = Transaction::where('status', 'flagged')->findOrFail($id);
-        $approved = $this->transactionService->approveTransaction($transaction, $request->user());
+        $approved = $this->transactionService->approveTransaction($id, $request->user());
 
         return response()->json([
             'success' => true,
@@ -72,8 +71,7 @@ class TransactionController extends Controller
      */
     public function flag(string $id): JsonResponse
     {
-        $transaction = Transaction::where('status', 'completed')->findOrFail($id);
-        $flagged = $this->transactionService->flagTransaction($transaction);
+        $flagged = $this->transactionService->flagTransaction($id);
 
         return response()->json([
             'success' => true,
