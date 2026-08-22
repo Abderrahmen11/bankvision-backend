@@ -57,16 +57,9 @@ class AccountController extends Controller
     /**
      * Update account details.
      */
-    public function update(Request $request, string $id): JsonResponse
+    public function update(UpdateAccountRequest $request, string $id): JsonResponse
     {
-        $account = Account::findOrFail($id);
-
-        $validated = $request->validate([
-            'status'        => ['sometimes', 'in:active,frozen,closed'],
-            'interest_rate' => ['sometimes', 'numeric', 'min:0'],
-        ]);
-
-        $updated = $this->accountService->updateAccount($account, $validated);
+        $updated = $this->accountService->updateAccount($id, $request->validated());
 
         return response()->json([
             'success' => true,
@@ -80,8 +73,7 @@ class AccountController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
-        $account = Account::findOrFail($id);
-        $this->accountService->closeAccount($account);
+        $this->accountService->closeAccount($id);
 
         return response()->json([
             'success' => true,
@@ -94,9 +86,8 @@ class AccountController extends Controller
      */
     public function transactions(Request $request, string $id): AnonymousResourceCollection
     {
-        $account = Account::findOrFail($id);
         $transactions = $this->accountService->getAccountTransactions(
-            $account,
+            $id,
             $request->only(['type', 'status', 'date_from', 'date_to'])
         );
 
