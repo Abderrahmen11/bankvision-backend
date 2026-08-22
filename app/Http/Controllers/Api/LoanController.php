@@ -72,8 +72,7 @@ class LoanController extends Controller
      */
     public function approve(string $id): JsonResponse
     {
-        $loan = Loan::where('status', 'pending')->findOrFail($id);
-        $approved = $this->loanService->approveLoan($loan);
+        $approved = $this->loanService->approveLoan($id);
 
         return response()->json([
             'success' => true,
