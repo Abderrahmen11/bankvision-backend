@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Alert\AssignAlertRequest;
 use App\Http\Resources\AlertResource;
-use App\Models\Alert;
 use App\Services\AlertService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -56,15 +56,9 @@ class AlertController extends Controller
     /**
      * Assign an alert to a specific bank employee.
      */
-    public function assign(Request $request, string $id): JsonResponse
+    public function assign(AssignAlertRequest $request, string $id): JsonResponse
     {
-        $alert = Alert::findOrFail($id);
-
-        $validated = $request->validate([
-            'user_id' => ['required', 'exists:users,id'],
-        ]);
-
-        $assigned = $this->alertService->assignAlert($alert, (int) $validated['user_id']);
+        $assigned = $this->alertService->assignAlert($id, (int) $request->validated('user_id'));
 
         return response()->json([
             'success' => true,
