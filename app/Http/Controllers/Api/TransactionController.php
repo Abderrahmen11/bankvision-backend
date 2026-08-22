@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Transaction\StoreTransactionRequest;
 use App\Http\Resources\TransactionResource;
-use App\Models\Transaction;
 use App\Services\TransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,19 +41,9 @@ class TransactionController extends Controller
     /**
      * Record a new transaction.
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreTransactionRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'account_id'       => ['required', 'exists:accounts,id'],
-            'transaction_type' => ['required', 'in:deposit,withdrawal,transfer,wire'],
-            'amount'           => ['required', 'numeric', 'min:0.01'],
-            'currency'         => ['sometimes', 'string', 'size:3'],
-            'description'      => ['nullable', 'string'],
-            'channel'          => ['sometimes', 'in:online,branch,atm,mobile'],
-            'counterparty'     => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $transaction = $this->transactionService->recordTransaction($validated);
+        $transaction = $this->transactionService->recordTransaction($request->validated());
 
         return response()->json([
             'success' => true,
