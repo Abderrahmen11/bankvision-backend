@@ -44,8 +44,9 @@ class AccountService
     /**
      * Update account status or interest rate.
      */
-    public function updateAccount(Account $account, array $data): Account
+    public function updateAccount(Account|string|int $account, array $data): Account
     {
+        $account = $account instanceof Account ? $account : Account::findOrFail($account);
         $account->update($data);
 
         return $account->fresh('customer');
@@ -54,16 +55,20 @@ class AccountService
     /**
      * Close an account by setting its status to closed.
      */
-    public function closeAccount(Account $account): bool
+    public function closeAccount(Account|string|int $account): bool
     {
+        $account = $account instanceof Account ? $account : Account::findOrFail($account);
+
         return $account->update(['status' => 'closed']);
     }
 
     /**
      * Get paginated transactions for an account.
      */
-    public function getAccountTransactions(Account $account, array $filters = [], int $perPage = 15): LengthAwarePaginator
+    public function getAccountTransactions(Account|string|int $account, array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
+        $account = $account instanceof Account ? $account : Account::findOrFail($account);
+
         return $account->transactions()
             ->with('approver')
             ->filter($filters)
