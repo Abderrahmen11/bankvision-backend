@@ -52,11 +52,13 @@ class BranchService
     /**
      * Delete a branch if no users or customers are attached.
      */
-    public function deleteBranch(Branch $branch): bool
+    public function deleteBranch(Branch|string|int $branch): bool
     {
+        $branch = $branch instanceof Branch ? $branch : Branch::findOrFail($branch);
+
         if ($branch->users()->exists() || $branch->customers()->exists()) {
-            throw ValidationException::withMessages([
-                'branch' => 'Cannot delete a branch that has assigned employees or customers.',
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'message' => 'Cannot delete a branch that has assigned employees or customers.',
             ]);
         }
 
