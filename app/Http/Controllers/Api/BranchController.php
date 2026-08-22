@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Branch\StoreBranchRequest;
+use App\Http\Requests\Branch\UpdateBranchRequest;
 use App\Http\Resources\BranchResource;
-use App\Models\Branch;
 use App\Services\BranchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,19 +42,9 @@ class BranchController extends Controller
     /**
      * Create a new branch.
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreBranchRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'branch_code' => ['required', 'string', 'unique:branches,branch_code'],
-            'branch_name' => ['required', 'string', 'max:255'],
-            'address'     => ['nullable', 'string'],
-            'city'        => ['nullable', 'string', 'max:100'],
-            'phone'       => ['nullable', 'string', 'max:20'],
-            'status'      => ['sometimes', 'in:active,inactive,under_renovation'],
-            'manager_id'  => ['nullable', 'exists:users,id'],
-        ]);
-
-        $branch = $this->branchService->createBranch($validated);
+        $branch = $this->branchService->createBranch($request->validated());
 
         return response()->json([
             'success' => true,
