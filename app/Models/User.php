@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
+    /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
@@ -57,7 +58,7 @@ class User extends Authenticatable
     /**
      * Get the branch the employee is assigned to.
      */
-    public function branch(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
     }
@@ -65,7 +66,7 @@ class User extends Authenticatable
     /**
      * Get the customers managed by this employee.
      */
-    public function managedCustomers(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function managedCustomers(): HasMany
     {
         return $this->hasMany(Customer::class, 'relationship_manager_id');
     }
@@ -73,7 +74,7 @@ class User extends Authenticatable
     /**
      * Get all audit logs for actions performed by this user.
      */
-    public function auditLogs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function auditLogs(): HasMany
     {
         return $this->hasMany(AuditLog::class);
     }
@@ -81,7 +82,7 @@ class User extends Authenticatable
     /**
      * Get the custom drag & drop dashboard layout preference for this user.
      */
-    public function dashboardLayout(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function dashboardLayout(): HasOne
     {
         return $this->hasOne(DashboardLayout::class);
     }

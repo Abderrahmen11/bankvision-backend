@@ -12,6 +12,20 @@ class Alert extends Model
     /** @use HasFactory<\Database\Factories\AlertFactory> */
     use HasFactory;
 
+    /**
+     * Auto-generate a unique alert number before inserting.
+     */
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function (self $alert) {
+            if (empty($alert->alert_number)) {
+                $alert->alert_number = 'ALT-' . date('Y') . '-' . rand(10000, 99999);
+            }
+        });
+    }
+
     protected $fillable = [
         'alert_number',
         'alert_type',
