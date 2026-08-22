@@ -28,10 +28,14 @@ class AlertService
     }
 
     /**
-     * Resolve an open alert.
+     * Resolve an open or in-progress alert.
      */
-    public function resolveAlert(Alert $alert): Alert
+    public function resolveAlert(Alert|string|int $alert): Alert
     {
+        $alert = $alert instanceof Alert
+            ? $alert
+            : Alert::whereIn('status', ['open', 'in-progress'])->findOrFail($alert);
+
         $alert->update([
             'status'      => 'resolved',
             'resolved_at' => now(),
@@ -41,11 +45,16 @@ class AlertService
     }
 
     /**
-     * Assign an alert to a staff member.
+     * Assign an alert to a staff member and mark it as in-progress.
      */
-    public function assignAlert(Alert $alert, int $userId): Alert
+    public function assignAlert(Alert|string|int $alert, int $userId): Alert
     {
-        $alert->update(['assigned_to' => $userId]);
+        $alert = $alert instanceof Alert ? $alert : Alert::findOrFail($alert);
+
+        $alert->update([
+            'assigned_to' => $userId,
+            'status'      => $alert->status === 'open' ? 'in-progress' : $alert->status,
+        ]);
 
         return $alert->fresh(['assignedTo', 'alertable']);
     }

@@ -43,8 +43,7 @@ class AlertController extends Controller
      */
     public function resolve(string $id): JsonResponse
     {
-        $alert = Alert::where('status', 'open')->findOrFail($id);
-        $resolved = $this->alertService->resolveAlert($alert);
+        $resolved = $this->alertService->resolveAlert($id);
 
         return response()->json([
             'success' => true,
