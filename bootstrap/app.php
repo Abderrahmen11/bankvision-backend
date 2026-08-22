@@ -30,10 +30,15 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->render(function (\Illuminate\Validation\ValidationException $e, \Illuminate\Http\Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
+                $errors  = $e->errors();
+                // If services set a top-level 'message' key, surface it directly.
+                $message = isset($errors['message'])
+                    ? (is_array($errors['message']) ? $errors['message'][0] : $errors['message'])
+                    : 'Validation error.';
                 return response()->json([
                     'success' => false,
-                    'message' => 'Validation error.',
-                    'errors'  => $e->errors(),
+                    'message' => $message,
+                    'errors'  => $errors,
                 ], 422);
             }
         });
