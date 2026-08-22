@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Account\StoreAccountRequest;
+use App\Http\Requests\Account\UpdateAccountRequest;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\TransactionResource;
-use App\Models\Account;
 use App\Services\AccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,18 +43,9 @@ class AccountController extends Controller
     /**
      * Open a new bank account.
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreAccountRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'customer_id'   => ['required', 'exists:customers,id'],
-            'account_type'  => ['required', 'in:savings,checking,business'],
-            'currency'      => ['sometimes', 'string', 'size:3'],
-            'balance'       => ['sometimes', 'numeric', 'min:0'],
-            'interest_rate' => ['sometimes', 'numeric', 'min:0'],
-            'opened_date'   => ['sometimes', 'date'],
-        ]);
-
-        $account = $this->accountService->openAccount($validated);
+        $account = $this->accountService->openAccount($request->validated());
 
         return response()->json([
             'success' => true,
