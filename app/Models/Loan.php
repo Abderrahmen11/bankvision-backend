@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -54,7 +55,7 @@ class Loan extends Model
     /**
      * Scope query to pending loans.
      */
-    public function scopePending(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('status', 'pending');
     }
@@ -62,7 +63,7 @@ class Loan extends Model
     /**
      * Scope query to active loans.
      */
-    public function scopeActive(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', 'active');
     }
@@ -70,7 +71,7 @@ class Loan extends Model
     /**
      * Scope query to delinquent loans.
      */
-    public function scopeDelinquent(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopeDelinquent(Builder $query): Builder
     {
         return $query->where('status', 'delinquent');
     }
@@ -78,7 +79,7 @@ class Loan extends Model
     /**
      * Scope query to apply multiple attribute filters.
      */
-    public function scopeFilter(\Illuminate\Database\Eloquent\Builder $query, array $filters): \Illuminate\Database\Eloquent\Builder
+    public function scopeFilter(Builder $query, array $filters): Builder
     {
         return $query
             ->when($filters['customer_id'] ?? null, fn ($q, $c) => $q->where('customer_id', $c))

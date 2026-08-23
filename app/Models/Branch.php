@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -56,7 +57,7 @@ class Branch extends Model
     /**
      * Scope query to active branches.
      */
-    public function scopeActive(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', 'active');
     }
@@ -64,7 +65,7 @@ class Branch extends Model
     /**
      * Scope query to search branches by name or code.
      */
-    public function scopeSearch(\Illuminate\Database\Eloquent\Builder $query, ?string $search): \Illuminate\Database\Eloquent\Builder
+    public function scopeSearch(Builder $query, ?string $search): Builder
     {
         return $query->when($search, fn ($q) =>
             $q->where(fn ($q) =>
@@ -77,7 +78,7 @@ class Branch extends Model
     /**
      * Scope query to apply multiple attribute filters.
      */
-    public function scopeFilter(\Illuminate\Database\Eloquent\Builder $query, array $filters): \Illuminate\Database\Eloquent\Builder
+    public function scopeFilter(Builder $query, array $filters): Builder
     {
         return $query
             ->search($filters['search'] ?? null)

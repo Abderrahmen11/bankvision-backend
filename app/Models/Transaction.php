@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -60,7 +61,7 @@ class Transaction extends Model
     /**
      * Scope query to completed transactions.
      */
-    public function scopeCompleted(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopeCompleted(Builder $query): Builder
     {
         return $query->where('status', 'completed');
     }
@@ -68,7 +69,7 @@ class Transaction extends Model
     /**
      * Scope query to flagged transactions.
      */
-    public function scopeFlagged(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopeFlagged(Builder $query): Builder
     {
         return $query->where('status', 'flagged');
     }
@@ -76,7 +77,7 @@ class Transaction extends Model
     /**
      * Scope query to apply multiple attribute filters.
      */
-    public function scopeFilter(\Illuminate\Database\Eloquent\Builder $query, array $filters): \Illuminate\Database\Eloquent\Builder
+    public function scopeFilter(Builder $query, array $filters): Builder
     {
         return $query
             ->when($filters['account_id'] ?? null, fn ($q, $a) => $q->where('account_id', $a))

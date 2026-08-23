@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -62,7 +63,7 @@ class Alert extends Model
     /**
      * Scope query to open alerts.
      */
-    public function scopeOpen(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopeOpen(Builder $query): Builder
     {
         return $query->where('status', 'open');
     }
@@ -70,7 +71,7 @@ class Alert extends Model
     /**
      * Scope query to specific severity level.
      */
-    public function scopeBySeverity(\Illuminate\Database\Eloquent\Builder $query, string $severity): \Illuminate\Database\Eloquent\Builder
+    public function scopeBySeverity(Builder $query, string $severity): Builder
     {
         return $query->where('severity', $severity);
     }
@@ -78,7 +79,7 @@ class Alert extends Model
     /**
      * Scope query to apply multiple attribute filters.
      */
-    public function scopeFilter(\Illuminate\Database\Eloquent\Builder $query, array $filters): \Illuminate\Database\Eloquent\Builder
+    public function scopeFilter(Builder $query, array $filters): Builder
     {
         return $query
             ->when($filters['severity'] ?? null,    fn ($q, $s) => $q->where('severity', $s))
