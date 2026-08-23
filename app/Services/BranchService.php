@@ -15,6 +15,7 @@ class BranchService
     {
         return Branch::query()
             ->with('manager')
+            ->withCount('users')
             ->filter($filters)
             ->latest()
             ->paginate($perPage);
@@ -25,7 +26,9 @@ class BranchService
      */
     public function getBranchDetails(string|int $id): Branch
     {
-        return Branch::with('manager')->findOrFail($id);
+        return Branch::with('manager')
+            ->withCount('users')
+            ->findOrFail($id);
     }
 
     /**
@@ -57,7 +60,7 @@ class BranchService
         $branch = $branch instanceof Branch ? $branch : Branch::findOrFail($branch);
 
         if ($branch->users()->exists() || $branch->customers()->exists()) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'message' => 'Cannot delete a branch that has assigned employees or customers.',
             ]);
         }
