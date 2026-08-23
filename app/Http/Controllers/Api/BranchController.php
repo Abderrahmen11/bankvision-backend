@@ -15,7 +15,8 @@ class BranchController extends Controller
 {
     public function __construct(
         protected BranchService $branchService
-    ) {}
+    ) {
+    }
 
     /**
      * List all branches with search and filters.
@@ -49,7 +50,7 @@ class BranchController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Branch created successfully.',
-            'data'    => BranchResource::make($branch),
+            'data' => BranchResource::make($branch),
         ], 201);
     }
 
@@ -63,7 +64,7 @@ class BranchController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Branch updated successfully.',
-            'data'    => BranchResource::make($updated),
+            'data' => BranchResource::make($updated),
         ]);
     }
 
