@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Branch;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -31,7 +32,7 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
             'role' => fake()->randomElement(['admin', 'manager', 'compliance', 'analyst', 'csr', 'auditor']),
-            'branch_id' => \App\Models\Branch::inRandomOrder()->first()?->id ?? \App\Models\Branch::factory(),
+            'branch_id' => Branch::inRandomOrder()->first()?->id ?? Branch::factory(),
             'status' => fake()->randomElement(['pending', 'active', 'suspended']),
             'last_login_at' => fake()->optional(0.8)->dateTimeThisYear(),
             'phone' => fake()->phoneNumber(),

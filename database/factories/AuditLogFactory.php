@@ -2,7 +2,12 @@
 
 namespace Database\Factories;
 
+use App\Models\Account;
+use App\Models\Alert;
 use App\Models\AuditLog;
+use App\Models\Customer;
+use App\Models\Loan;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -35,15 +40,15 @@ class AuditLogFactory extends Factory
         };
 
         $modelMap = [
-            'users'        => \App\Models\User::class,
-            'customers'    => \App\Models\Customer::class,
-            'accounts'     => \App\Models\Account::class,
-            'transactions' => \App\Models\Transaction::class,
-            'loans'        => \App\Models\Loan::class,
-            'alerts'       => \App\Models\Alert::class,
+            'users'        => User::class,
+            'customers'    => Customer::class,
+            'accounts'     => Account::class,
+            'transactions' => Transaction::class,
+            'loans'        => Loan::class,
+            'alerts'       => Alert::class,
         ];
 
-        $modelClass = $modelMap[$tableName] ?? \App\Models\User::class;
+        $modelClass = $modelMap[$tableName] ?? User::class;
         $recordId   = $modelClass::inRandomOrder()->first()?->id ?? $modelClass::factory()->create()->id;
 
         // Generate contextual old_values and new_values JSON arrays based on action
