@@ -78,6 +78,88 @@ class CustomerTest extends TestCase
         $this->assertEquals('premium', $response->json('data.0.customer_type'));
     }
 
+    public function test_customers_can_be_filtered_by_branch_id(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $otherBranch = Branch::factory()->create();
+        Customer::factory()->create(['branch_id' => $this->branch->id, 'full_name' => 'Branch One Cust']);
+        Customer::factory()->create(['branch_id' => $otherBranch->id, 'full_name' => 'Branch Two Cust']);
+
+        $response = $this->getJson("/api/customers?branch_id={$this->branch->id}");
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals('Branch One Cust', $response->json('data.0.full_name'));
+    }
+
+    public function test_customers_can_be_searched_by_phone_and_customer_number(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $cust = Customer::factory()->create([
+            'branch_id'       => $this->branch->id,
+            'phone'           => '+1-999-888-7777',
+            'customer_number' => 'CUST-2026-99999',
+        ]);
+        Customer::factory()->create(['branch_id' => $this->branch->id]);
+
+        // Search by phone
+        $resPhone = $this->getJson('/api/customers?search=888-7777');
+        $resPhone->assertStatus(200);
+        $this->assertCount(1, $resPhone->json('data'));
+        $this->assertEquals($cust->id, $resPhone->json('data.0.id'));
+
+        // Search by customer number
+        $resNum = $this->getJson('/api/customers?search=CUST-2026-99999');
+        $resNum->assertStatus(200);
+        $this->assertCount(1, $resNum->json('data'));
+        $this->assertEquals($cust->id, $resNum->json('data.0.id'));
+    }
+
+    public function test_customers_can_be_sorted_by_registration_date(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $custOld = Customer::factory()->create([
+            'branch_id'         => $this->branch->id,
+            'full_name'         => 'Old Customer',
+            'registration_date' => '2025-01-01',
+        ]);
+        $custNew = Customer::factory()->create([
+            'branch_id'         => $this->branch->id,
+            'full_name'         => 'New Customer',
+            'registration_date' => '2026-06-01',
+        ]);
+
+        // Ascending
+        $resAsc = $this->getJson('/api/customers?sort_by=registration_date&sort_direction=asc');
+        $resAsc->assertStatus(200);
+        $this->assertEquals('Old Customer', $resAsc->json('data.0.full_name'));
+
+        // Descending
+        $resDesc = $this->getJson('/api/customers?sort_by=registration_date&sort_direction=desc');
+        $resDesc->assertStatus(200);
+        $this->assertEquals('New Customer', $resDesc->json('data.0.full_name'));
+    }
+
+    public function test_customers_pagination_and_custom_per_page(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Customer::factory()->count(20)->create(['branch_id' => $this->branch->id]);
+
+        // Default 15 per page
+        $resDefault = $this->getJson('/api/customers');
+        $resDefault->assertStatus(200);
+        $this->assertCount(15, $resDefault->json('data'));
+        $this->assertEquals(15, $resDefault->json('meta.per_page'));
+        $this->assertEquals(20, $resDefault->json('meta.total'));
+
+        // Custom per_page = 5
+        $resCustom = $this->getJson('/api/customers?per_page=5&page=2');
+        $resCustom->assertStatus(200);
+        $this->assertCount(5, $resCustom->json('data'));
+        $this->assertEquals(2, $resCustom->json('meta.current_page'));
+        $this->assertEquals(5, $resCustom->json('meta.per_page'));
+    }
+
     // ─── Show ────────────────────────────────────────────────────────────────────
 
     public function test_authenticated_user_can_view_single_customer(): void
