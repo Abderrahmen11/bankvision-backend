@@ -74,7 +74,7 @@ class Customer extends Model
     }
 
     /**
-     * Scope query to search by name, email, or customer number.
+     * Scope query to search by name, email, phone, or customer number.
      */
     public function scopeSearch(Builder $query, ?string $search): Builder
     {
@@ -82,6 +82,7 @@ class Customer extends Model
             $q->where(fn ($q) =>
                 $q->where('full_name', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%")
                   ->orWhere('customer_number', 'like', "%{$search}%")
             )
         );
@@ -94,8 +95,9 @@ class Customer extends Model
     {
         return $query
             ->search($filters['search'] ?? null)
-            ->when($filters['type'] ?? null, fn ($q, $t) => $q->where('customer_type', $t))
+            ->when($filters['type'] ?? null,       fn ($q, $t) => $q->where('customer_type', $t))
             ->when($filters['kyc_status'] ?? null, fn ($q, $k) => $q->where('kyc_status', $k))
-            ->when($filters['risk_level'] ?? null, fn ($q, $r) => $q->where('risk_level', $r));
+            ->when($filters['risk_level'] ?? null, fn ($q, $r) => $q->where('risk_level', $r))
+            ->when($filters['branch_id'] ?? null,  fn ($q, $b) => $q->where('branch_id', $b));
     }
 }
