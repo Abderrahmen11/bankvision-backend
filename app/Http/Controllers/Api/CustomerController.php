@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Customer\IndexCustomerRequest;
 use App\Http\Requests\Customer\StoreCustomerRequest;
 use App\Http\Requests\Customer\UpdateCustomerRequest;
 use App\Http\Resources\AccountResource;
@@ -17,15 +18,17 @@ class CustomerController extends Controller
 {
     public function __construct(
         protected CustomerService $customerService
-    ) {}
+    ) {
+    }
 
     /**
-     * List customers with search and filters.
+     * List customers with search, filters, sorting, and pagination.
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(IndexCustomerRequest $request): AnonymousResourceCollection
     {
         $customers = $this->customerService->getPaginatedCustomers(
-            $request->only(['search', 'type', 'kyc_status', 'risk_level'])
+            $request->validated(),
+            user: $request->user()
         );
 
         return CustomerResource::collection($customers);
