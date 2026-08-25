@@ -54,7 +54,7 @@ class CustomerController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Customer created successfully.',
-            'data'    => CustomerResource::make($customer),
+            'data' => CustomerResource::make($customer),
         ], 201);
     }
 
@@ -68,7 +68,7 @@ class CustomerController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Customer updated successfully.',
-            'data'    => CustomerResource::make($updated),
+            'data' => CustomerResource::make($updated),
         ]);
     }
 
