@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -10,16 +11,35 @@ use Illuminate\Validation\ValidationException;
 class CustomerService
 {
     /**
-     * Get paginated customer list with filters and eager-loaded relations.
+     * Get paginated customer list with filters, search, sorting, and eager-loaded relations.
      */
-    public function getPaginatedCustomers(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    public function getPaginatedCustomers(array $filters = [], ?int $perPage = null, ?User $user = null): LengthAwarePaginator
     {
-        return Customer::query()
+        $perPage = (int) ($filters['per_page'] ?? $perPage ?? 15);
+        $user = $user ?? auth()->user();
+
+        $query = Customer::query()
             ->with(['branch', 'relationshipManager'])
             ->withCount(['accounts', 'loans'])
-            ->filter($filters)
-            ->latest()
-            ->paginate($perPage);
+            ->filter($filters);
+
+        // Role-based restrictions hook (extensible for future role-scoping without separate endpoints)
+        if ($user && $user->role === 'manager' && $user->branch_id) {
+            // E.g. $query->where('branch_id', $user->branch_id);
+        }
+
+        // Sorting by registration_date or specified column with direction
+        $sortBy = $filters['sort_by'] ?? ($filters['sort_direction'] ?? $filters['direction'] ?? $filters['order'] ?? null ? 'registration_date' : null);
+        $direction = strtolower($filters['sort_direction'] ?? $filters['direction'] ?? $filters['order'] ?? 'desc');
+        $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
+
+        if ($sortBy && in_array($sortBy, ['registration_date', 'created_at', 'full_name', 'customer_number'], true)) {
+            $query->orderBy($sortBy, $direction);
+        } else {
+            $query->latest();
+        }
+
+        return $query->paginate($perPage);
     }
 
     /**
