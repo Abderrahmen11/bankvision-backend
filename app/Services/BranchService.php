@@ -3,22 +3,46 @@
 namespace App\Services;
 
 use App\Models\Branch;
+use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
 
 class BranchService
 {
+    /** Sortable columns and their actual DB column names. */
+    private const SORT_MAP = [
+        'branch_name' => 'branch_name',
+        'branch_code' => 'branch_code',
+        'city'        => 'city',
+        'created_at'  => 'created_at',
+    ];
+
     /**
-     * Get paginated branches with search and filters.
+     * Get paginated branches with search, filters, sorting, and manager relation.
      */
-    public function getPaginatedBranches(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    public function getPaginatedBranches(array $filters = [], ?int $perPage = null, ?User $user = null): LengthAwarePaginator
     {
-        return Branch::query()
+        $perPage = (int) ($filters['per_page'] ?? $perPage ?? 15);
+        $user    = $user ?? auth()->user();
+
+        $query = Branch::query()
             ->with('manager')
             ->withCount('users')
-            ->filter($filters)
-            ->latest()
-            ->paginate($perPage);
+            ->filter($filters);
+
+        // Role-based restrictions hook (extensible for future role-scoping without separate endpoints)
+
+        $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
+        $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
+        $sortDirection = in_array($sortDirection, ['asc', 'desc'], true) ? $sortDirection : 'desc';
+
+        if ($sortColumn) {
+            $query->orderBy($sortColumn, $sortDirection);
+        } else {
+            $query->latest();
+        }
+
+        return $query->paginate($perPage);
     }
 
     /**
