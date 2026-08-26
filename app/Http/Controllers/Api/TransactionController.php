@@ -17,12 +17,13 @@ class TransactionController extends Controller
     ) {}
 
     /**
-     * List transactions with filters.
+     * List transactions with search, filters, sorting, and pagination.
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(IndexTransactionRequest $request): AnonymousResourceCollection
     {
         $transactions = $this->transactionService->getPaginatedTransactions(
-            $request->only(['account_id', 'type', 'status', 'channel', 'date_from', 'date_to'])
+            $request->validated(),
+            user: $request->user()
         );
 
         return TransactionResource::collection($transactions);

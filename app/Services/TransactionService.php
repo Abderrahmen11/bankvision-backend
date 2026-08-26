@@ -12,16 +12,39 @@ use Illuminate\Validation\ValidationException;
 
 class TransactionService
 {
+    /** Sortable columns and their actual DB column names. */
+    private const SORT_MAP = [
+        'transaction_date' => 'transaction_date',
+        'approved_at'      => 'approved_at',
+        'amount'           => 'amount',
+        'created_at'       => 'created_at',
+    ];
+
     /**
-     * Get paginated transactions with filters and eager loaded relations.
+     * Get paginated transactions with search, filters, sorting, and eager-loaded relations.
      */
-    public function getPaginatedTransactions(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    public function getPaginatedTransactions(array $filters = [], ?int $perPage = null, ?User $user = null): LengthAwarePaginator
     {
-        return Transaction::query()
+        $perPage = (int) ($filters['per_page'] ?? $perPage ?? 15);
+        $user    = $user ?? auth()->user();
+
+        $query = Transaction::query()
             ->with(['account.customer', 'approver'])
-            ->filter($filters)
-            ->latest('transaction_date')
-            ->paginate($perPage);
+            ->filter($filters);
+
+        // Role-based restrictions hook (extensible for future role-scoping without separate endpoints)
+
+        $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
+        $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
+        $sortDirection = in_array($sortDirection, ['asc', 'desc'], true) ? $sortDirection : 'desc';
+
+        if ($sortColumn) {
+            $query->orderBy($sortColumn, $sortDirection);
+        } else {
+            $query->latest('transaction_date');
+        }
+
+        return $query->paginate($perPage);
     }
 
     /**
