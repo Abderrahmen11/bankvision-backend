@@ -75,16 +75,31 @@ class Transaction extends Model
     }
 
     /**
+     * Scope query to search by transaction number or counterparty.
+     */
+    public function scopeSearch(Builder $query, ?string $search): Builder
+    {
+        return $query->when($search, fn ($q) =>
+            $q->where(fn ($q) =>
+                $q->where('transaction_number', 'like', "%{$search}%")
+                  ->orWhere('counterparty', 'like', "%{$search}%")
+            )
+        );
+    }
+
+    /**
      * Scope query to apply multiple attribute filters.
      */
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         return $query
-            ->when($filters['account_id'] ?? null, fn ($q, $a) => $q->where('account_id', $a))
-            ->when($filters['type'] ?? null,       fn ($q, $t) => $q->where('transaction_type', $t))
-            ->when($filters['status'] ?? null,     fn ($q, $s) => $q->where('status', $s))
-            ->when($filters['channel'] ?? null,    fn ($q, $c) => $q->where('channel', $c))
-            ->when($filters['date_from'] ?? null,  fn ($q, $d) => $q->whereDate('transaction_date', '>=', $d))
-            ->when($filters['date_to'] ?? null,    fn ($q, $d) => $q->whereDate('transaction_date', '<=', $d));
+            ->search($filters['search'] ?? null)
+            ->when($filters['account_id'] ?? null,  fn ($q, $a) => $q->where('account_id', $a))
+            ->when($filters['transaction_type'] ?? $filters['type'] ?? null, fn ($q, $t) => $q->where('transaction_type', $t))
+            ->when($filters['status'] ?? null,      fn ($q, $s) => $q->where('status', $s))
+            ->when($filters['channel'] ?? null,     fn ($q, $c) => $q->where('channel', $c))
+            ->when($filters['approved_by'] ?? null, fn ($q, $u) => $q->where('approved_by', $u))
+            ->when($filters['date_from'] ?? null,   fn ($q, $d) => $q->whereDate('transaction_date', '>=', $d))
+            ->when($filters['date_to'] ?? null,     fn ($q, $d) => $q->whereDate('transaction_date', '<=', $d));
     }
 }
