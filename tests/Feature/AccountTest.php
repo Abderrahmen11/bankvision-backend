@@ -75,6 +75,126 @@ class AccountTest extends TestCase
         $this->assertCount(2, $response->json('data'));
     }
 
+    public function test_accounts_can_be_searched_by_account_number(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $target = Account::factory()->create([
+            'customer_id'    => $this->customer->id,
+            'account_number' => 'ACC-2026-UNIQUE99',
+        ]);
+        Account::factory()->create(['customer_id' => $this->customer->id]);
+
+        $response = $this->getJson('/api/accounts?search=UNIQUE99');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($target->id, $response->json('data.0.id'));
+    }
+
+    public function test_accounts_can_be_searched_by_customer_name(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $namedCustomer = Customer::factory()->create([
+            'branch_id' => $this->branch->id,
+            'full_name'  => 'Zelda Hyrule',
+        ]);
+        Account::factory()->create(['customer_id' => $namedCustomer->id]);
+        Account::factory()->create(['customer_id' => $this->customer->id]);
+
+        $response = $this->getJson('/api/accounts?search=Zelda');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($namedCustomer->id, $response->json('data.0.customer.id'));
+    }
+
+    public function test_accounts_can_be_filtered_by_branch_id(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $otherBranch    = Branch::factory()->create();
+        $otherCustomer  = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+        Account::factory()->create(['customer_id' => $this->customer->id]);
+        Account::factory()->create(['customer_id' => $otherCustomer->id]);
+
+        $response = $this->getJson("/api/accounts?branch_id={$this->branch->id}");
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+    }
+
+    public function test_accounts_can_be_filtered_by_balance_range(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Account::factory()->create(['customer_id' => $this->customer->id, 'balance' => 100]);
+        Account::factory()->create(['customer_id' => $this->customer->id, 'balance' => 500]);
+        Account::factory()->create(['customer_id' => $this->customer->id, 'balance' => 2000]);
+
+        $response = $this->getJson('/api/accounts?balance_min=200&balance_max=1000');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals(500.0, $response->json('data.0.balance'));
+    }
+
+    public function test_accounts_can_be_sorted_by_balance(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Account::factory()->create(['customer_id' => $this->customer->id, 'balance' => 50]);
+        Account::factory()->create(['customer_id' => $this->customer->id, 'balance' => 9000]);
+        Account::factory()->create(['customer_id' => $this->customer->id, 'balance' => 300]);
+
+        // Ascending
+        $resAsc = $this->getJson('/api/accounts?sort_by=balance&sort_direction=asc');
+        $resAsc->assertStatus(200);
+        $this->assertEquals(50.0, $resAsc->json('data.0.balance'));
+
+        // Descending
+        $resDesc = $this->getJson('/api/accounts?sort_by=balance&sort_direction=desc');
+        $resDesc->assertStatus(200);
+        $this->assertEquals(9000.0, $resDesc->json('data.0.balance'));
+    }
+
+    public function test_accounts_pagination_defaults_to_15_per_page(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Account::factory()->count(20)->create(['customer_id' => $this->customer->id]);
+
+        $response = $this->getJson('/api/accounts');
+
+        $response->assertStatus(200);
+        $this->assertCount(15, $response->json('data'));
+        $this->assertEquals(15, $response->json('meta.per_page'));
+        $this->assertEquals(20, $response->json('meta.total'));
+    }
+
+    public function test_accounts_supports_custom_per_page_and_page(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Account::factory()->count(20)->create(['customer_id' => $this->customer->id]);
+
+        $response = $this->getJson('/api/accounts?per_page=6&page=2');
+
+        $response->assertStatus(200);
+        $this->assertCount(6, $response->json('data'));
+        $this->assertEquals(2, $response->json('meta.current_page'));
+        $this->assertEquals(6, $response->json('meta.per_page'));
+    }
+
+    public function test_account_response_includes_customer_and_branch(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Account::factory()->create(['customer_id' => $this->customer->id]);
+
+        $response = $this->getJson('/api/accounts');
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'data' => ['*' => ['id', 'account_number', 'customer' => ['id', 'full_name']]],
+        ]);
+    }
+
+
+
     // ─── Show ────────────────────────────────────────────────────────────────────
 
     public function test_authenticated_user_can_view_single_account(): void
