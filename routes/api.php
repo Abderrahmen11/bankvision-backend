@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\TransactionController;
+use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -132,5 +133,19 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::middleware('role:admin,compliance,manager')->group(function () {
         Route::post('alerts/{id}/resolve', [AlertController::class, 'resolve']);
         Route::post('alerts/{id}/assign',  [AlertController::class, 'assign']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Users — staff read, admin full management
+    |----------------------------------------------------------------------
+    */
+    Route::get('users',         [UserController::class, 'index']);
+    Route::get('users/{id}',    [UserController::class, 'show']);
+
+    Route::middleware('role:admin')->group(function () {
+        Route::post('users',        [UserController::class, 'store']);
+        Route::put('users/{id}',    [UserController::class, 'update']);
+        Route::delete('users/{id}', [UserController::class, 'destroy']);
     });
 });
