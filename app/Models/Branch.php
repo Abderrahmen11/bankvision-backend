@@ -63,13 +63,14 @@ class Branch extends Model
     }
 
     /**
-     * Scope query to search branches by name or code.
+     * Scope query to search branches by name, phone, or code.
      */
     public function scopeSearch(Builder $query, ?string $search): Builder
     {
         return $query->when($search, fn ($q) =>
             $q->where(fn ($q) =>
                 $q->where('branch_name', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%")
                   ->orWhere('branch_code', 'like', "%{$search}%")
             )
         );
@@ -83,6 +84,7 @@ class Branch extends Model
         return $query
             ->search($filters['search'] ?? null)
             ->when($filters['status'] ?? null, fn ($q, $s) => $q->where('status', $s))
-            ->when($filters['city'] ?? null,   fn ($q, $c) => $q->where('city', 'like', "%{$c}%"));
+            ->when($filters['city'] ?? null,   fn ($q, $c) => $q->where('city', 'like', "%{$c}%"))
+            ->when($filters['manager_id'] ?? $filters['manager'] ?? null, fn ($q, $m) => $q->where('manager_id', $m));
     }
 }
