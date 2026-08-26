@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Branch\IndexBranchRequest;
 use App\Http\Requests\Branch\StoreBranchRequest;
 use App\Http\Requests\Branch\UpdateBranchRequest;
 use App\Http\Resources\BranchResource;
@@ -19,12 +20,13 @@ class BranchController extends Controller
     }
 
     /**
-     * List all branches with search and filters.
+     * List all branches with search, filters, sorting, and pagination.
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(IndexBranchRequest $request): AnonymousResourceCollection
     {
         $branches = $this->branchService->getPaginatedBranches(
-            $request->only(['search', 'status', 'city'])
+            $request->validated(),
+            user: $request->user()
         );
 
         return BranchResource::collection($branches);
