@@ -64,6 +64,146 @@ class LoanTest extends TestCase
         $this->assertEquals('pending', $response->json('data.0.status'));
     }
 
+    public function test_loans_can_be_searched_by_loan_number(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $target = Loan::factory()->create([
+            'customer_id' => $this->customer->id,
+            'loan_number' => 'LN-2026-SEARCH999',
+        ]);
+        Loan::factory()->create(['customer_id' => $this->customer->id]);
+
+        $response = $this->getJson('/api/loans?search=SEARCH999');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($target->id, $response->json('data.0.id'));
+    }
+
+    public function test_loans_can_be_searched_by_customer_name_and_number(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $customCustomer = Customer::factory()->create([
+            'branch_id'       => $this->branch->id,
+            'full_name'       => 'Alexander Hamilton',
+            'customer_number' => 'CUST-2026-77777',
+        ]);
+        $target = Loan::factory()->create(['customer_id' => $customCustomer->id]);
+        Loan::factory()->create(['customer_id' => $this->customer->id]);
+
+        // Search by customer name
+        $resName = $this->getJson('/api/customers?search=Hamilton');
+        $resName->assertStatus(200);
+
+        $resLoan = $this->getJson('/api/loans?search=Hamilton');
+        $resLoan->assertStatus(200);
+        $this->assertCount(1, $resLoan->json('data'));
+        $this->assertEquals($target->id, $resLoan->json('data.0.id'));
+
+        // Search by customer number
+        $resCustNum = $this->getJson('/api/loans?search=77777');
+        $resCustNum->assertStatus(200);
+        $this->assertCount(1, $resCustNum->json('data'));
+        $this->assertEquals($target->id, $resCustNum->json('data.0.id'));
+    }
+
+    public function test_loans_can_be_filtered_by_type_term_and_amount_ranges(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $l1 = Loan::factory()->create([
+            'customer_id'         => $this->customer->id,
+            'loan_type'           => 'mortgage',
+            'term_months'         => 360,
+            'principal_amount'    => 250000,
+            'outstanding_balance' => 240000,
+            'interest_rate'       => 4.5,
+        ]);
+        Loan::factory()->create([
+            'customer_id'         => $this->customer->id,
+            'loan_type'           => 'personal',
+            'term_months'         => 12,
+            'principal_amount'    => 5000,
+            'outstanding_balance' => 3000,
+            'interest_rate'       => 8.0,
+        ]);
+
+        $response = $this->getJson('/api/loans?' . http_build_query([
+            'loan_type'               => 'mortgage',
+            'term_months'             => 360,
+            'principal_amount_min'    => 200000,
+            'principal_amount_max'    => 300000,
+            'outstanding_balance_min' => 200000,
+            'interest_rate_max'       => 5.0,
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($l1->id, $response->json('data.0.id'));
+    }
+
+    public function test_loans_can_be_sorted_by_principal_and_outstanding_balance(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Loan::factory()->create(['customer_id' => $this->customer->id, 'principal_amount' => 1000]);
+        Loan::factory()->create(['customer_id' => $this->customer->id, 'principal_amount' => 50000]);
+        Loan::factory()->create(['customer_id' => $this->customer->id, 'principal_amount' => 10000]);
+
+        // Ascending by principal
+        $resAsc = $this->getJson('/api/loans?sort_by=principal_amount&sort_direction=asc');
+        $resAsc->assertStatus(200);
+        $this->assertEquals(1000.0, $resAsc->json('data.0.principal_amount'));
+
+        // Descending by principal
+        $resDesc = $this->getJson('/api/loans?sort_by=principal_amount&sort_direction=desc');
+        $resDesc->assertStatus(200);
+        $this->assertEquals(50000.0, $resDesc->json('data.0.principal_amount'));
+    }
+
+    public function test_loans_pagination_defaults_to_15_per_page(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Loan::factory()->count(20)->create(['customer_id' => $this->customer->id]);
+
+        $response = $this->getJson('/api/loans');
+
+        $response->assertStatus(200);
+        $this->assertCount(15, $response->json('data'));
+        $this->assertEquals(15, $response->json('meta.per_page'));
+        $this->assertEquals(20, $response->json('meta.total'));
+    }
+
+    public function test_loans_supports_custom_per_page_and_page(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Loan::factory()->count(20)->create(['customer_id' => $this->customer->id]);
+
+        $response = $this->getJson('/api/loans?per_page=8&page=2');
+
+        $response->assertStatus(200);
+        $this->assertCount(8, $response->json('data'));
+        $this->assertEquals(2, $response->json('meta.current_page'));
+        $this->assertEquals(8, $response->json('meta.per_page'));
+    }
+
+    public function test_loan_response_includes_customer(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Loan::factory()->create(['customer_id' => $this->customer->id]);
+
+        $response = $this->getJson('/api/loans');
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'data' => [
+                '*' => [
+                    'id',
+                    'loan_number',
+                    'customer' => ['id', 'full_name'],
+                ],
+            ],
+        ]);
+    }
+
     // ─── Show ────────────────────────────────────────────────────────────────────
 
     public function test_can_view_single_loan(): void
