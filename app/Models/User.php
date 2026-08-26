@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -86,4 +87,31 @@ class User extends Authenticatable
     {
         return $this->hasOne(DashboardLayout::class);
     }
+
+    /**
+     * Scope query to search users by name, email, or phone.
+     */
+    public function scopeSearch(Builder $query, ?string $search): Builder
+    {
+        return $query->when($search, fn ($q) =>
+            $q->where(fn ($q) =>
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%")
+            )
+        );
+    }
+
+    /**
+     * Scope query to apply multiple attribute filters.
+     */
+    public function scopeFilter(Builder $query, array $filters): Builder
+    {
+        return $query
+            ->search($filters['search'] ?? null)
+            ->when($filters['role'] ?? null, fn ($q, $r) => $q->where('role', $r))
+            ->when($filters['status'] ?? null, fn ($q, $s) => $q->where('status', $s))
+            ->when($filters['branch_id'] ?? $filters['branch'] ?? null, fn ($q, $b) => $q->where('branch_id', $b));
+    }
 }
+
