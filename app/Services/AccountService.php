@@ -3,20 +3,44 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class AccountService
 {
+    /** Sortable columns and their actual DB column names. */
+    private const SORT_MAP = [
+        'balance'         => 'balance',
+        'opened_date'     => 'opened_date',
+        'account_number'  => 'account_number',
+        'created_at'      => 'created_at',
+        'updated_at'      => 'updated_at', // proxy for last activity
+    ];
+
     /**
-     * Get paginated account list with filters and owner customer.
+     * Get paginated account list with search, filters, sorting, and eager-loaded relations.
      */
-    public function getPaginatedAccounts(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    public function getPaginatedAccounts(array $filters = [], ?int $perPage = null, ?User $user = null): LengthAwarePaginator
     {
-        return Account::query()
-            ->with('customer')
-            ->filter($filters)
-            ->latest()
-            ->paginate($perPage);
+        $perPage  = (int) ($filters['per_page'] ?? $perPage ?? 15);
+        $user     = $user ?? auth()->user();
+
+        $query = Account::query()
+            ->with('customer.branch')
+            ->filter($filters);
+
+        // Role-based restrictions hook (extend here without new endpoints)
+        // e.g. if ($user?->role === 'manager') { $query->whereHas('customer', fn ($q) => $q->where('branch_id', $user->branch_id)); }
+
+        $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
+        $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
+        $sortDirection = in_array($sortDirection, ['asc', 'desc'], true) ? $sortDirection : 'desc';
+
+        $sortColumn
+            ? $query->orderBy($sortColumn, $sortDirection)
+            : $query->latest();
+
+        return $query->paginate($perPage);
     }
 
     /**
