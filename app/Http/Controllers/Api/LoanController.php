@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Loan\IndexLoanRequest;
 use App\Http\Requests\Loan\StoreLoanRequest;
 use App\Http\Requests\Loan\UpdateLoanRequest;
 use App\Http\Resources\LoanResource;
@@ -18,12 +19,13 @@ class LoanController extends Controller
     ) {}
 
     /**
-     * List loans with optional filters.
+     * List loans with search, filters, sorting, and pagination.
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(IndexLoanRequest $request): AnonymousResourceCollection
     {
         $loans = $this->loanService->getPaginatedLoans(
-            $request->only(['customer_id', 'type', 'status'])
+            $request->validated(),
+            user: $request->user()
         );
 
         return LoanResource::collection($loans);
