@@ -84,6 +84,128 @@ class TransactionTest extends TestCase
         $this->assertEquals('flagged', $response->json('data.0.status'));
     }
 
+    public function test_transactions_can_be_searched_by_transaction_number(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $target = Transaction::factory()->create([
+            'account_id'         => $this->account->id,
+            'transaction_number' => 'TXN-2026-SEARCH123',
+        ]);
+        Transaction::factory()->create(['account_id' => $this->account->id]);
+
+        $response = $this->getJson('/api/transactions?search=SEARCH123');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($target->id, $response->json('data.0.id'));
+    }
+
+    public function test_transactions_can_be_searched_by_counterparty(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $target = Transaction::factory()->create([
+            'account_id'   => $this->account->id,
+            'counterparty' => 'Acme Corporation International',
+        ]);
+        Transaction::factory()->create(['account_id' => $this->account->id, 'counterparty' => 'Retail Store']);
+
+        $response = $this->getJson('/api/transactions?search=Acme');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($target->id, $response->json('data.0.id'));
+    }
+
+    public function test_transactions_can_be_filtered_by_type_channel_and_approved_by(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $t1 = Transaction::factory()->create([
+            'account_id'       => $this->account->id,
+            'transaction_type' => 'wire',
+            'channel'          => 'wire',
+            'approved_by'      => $this->compliance->id,
+        ]);
+        Transaction::factory()->create([
+            'account_id'       => $this->account->id,
+            'transaction_type' => 'deposit',
+            'channel'          => 'branch',
+            'approved_by'      => null,
+        ]);
+
+        $response = $this->getJson("/api/transactions?transaction_type=wire&channel=wire&approved_by={$this->compliance->id}");
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($t1->id, $response->json('data.0.id'));
+    }
+
+    public function test_transactions_can_be_sorted_by_amount_and_approved_at(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Transaction::factory()->create(['account_id' => $this->account->id, 'amount' => 50.00]);
+        Transaction::factory()->create(['account_id' => $this->account->id, 'amount' => 5000.00]);
+        Transaction::factory()->create(['account_id' => $this->account->id, 'amount' => 250.00]);
+
+        // Ascending by amount
+        $resAsc = $this->getJson('/api/transactions?sort_by=amount&sort_direction=asc');
+        $resAsc->assertStatus(200);
+        $this->assertEquals(50.0, $resAsc->json('data.0.amount'));
+
+        // Descending by amount
+        $resDesc = $this->getJson('/api/transactions?sort_by=amount&sort_direction=desc');
+        $resDesc->assertStatus(200);
+        $this->assertEquals(5000.0, $resDesc->json('data.0.amount'));
+    }
+
+    public function test_transactions_pagination_defaults_to_15_per_page(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Transaction::factory()->count(20)->create(['account_id' => $this->account->id]);
+
+        $response = $this->getJson('/api/transactions');
+
+        $response->assertStatus(200);
+        $this->assertCount(15, $response->json('data'));
+        $this->assertEquals(15, $response->json('meta.per_page'));
+        $this->assertEquals(20, $response->json('meta.total'));
+    }
+
+    public function test_transactions_supports_custom_per_page_and_page(): void
+    {
+        Sanctum::actingAs($this->csr);
+        Transaction::factory()->count(20)->create(['account_id' => $this->account->id]);
+
+        $response = $this->getJson('/api/transactions?per_page=7&page=2');
+
+        $response->assertStatus(200);
+        $this->assertCount(7, $response->json('data'));
+        $this->assertEquals(2, $response->json('meta.current_page'));
+        $this->assertEquals(7, $response->json('meta.per_page'));
+    }
+
+    public function test_transaction_response_includes_account_and_approver(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $txn = Transaction::factory()->create([
+            'account_id'  => $this->account->id,
+            'approved_by' => $this->compliance->id,
+        ]);
+
+        $response = $this->getJson('/api/transactions');
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'data' => [
+                '*' => [
+                    'id',
+                    'transaction_number',
+                    'account' => ['id', 'account_number', 'customer'],
+                    'approver',
+                ],
+            ],
+        ]);
+    }
+
     // ─── Show ────────────────────────────────────────────────────────────────────
 
     public function test_can_view_single_transaction(): void
