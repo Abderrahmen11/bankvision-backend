@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Account\IndexAccountRequest;
 use App\Http\Requests\Account\StoreAccountRequest;
 use App\Http\Requests\Account\UpdateAccountRequest;
 use App\Http\Resources\AccountResource;
@@ -19,12 +20,13 @@ class AccountController extends Controller
     ) {}
 
     /**
-     * List accounts with optional filters.
+     * List accounts with search, filters, sorting, and pagination.
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(IndexAccountRequest $request): AnonymousResourceCollection
     {
         $accounts = $this->accountService->getPaginatedAccounts(
-            $request->only(['customer_id', 'type', 'status', 'currency'])
+            $request->validated(),
+            user: $request->user()
         );
 
         return AccountResource::collection($accounts);
