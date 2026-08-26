@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Alert;
 use App\Models\Loan;
+use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,17 @@ use Illuminate\Validation\ValidationException;
 
 class LoanService
 {
+    /** Sortable columns and their actual DB column names. */
+    private const SORT_MAP = [
+        'principal_amount'    => 'principal_amount',
+        'outstanding_balance' => 'outstanding_balance',
+        'interest_rate'       => 'interest_rate',
+        'start_date'          => 'start_date',
+        'end_date'            => 'end_date',
+        'next_payment_date'   => 'next_payment_date',
+        'created_at'          => 'created_at',
+    ];
+
     /**
      * Allowed status transitions.
      */
@@ -23,15 +35,30 @@ class LoanService
     ];
 
     /**
-     * Get paginated loans with filters and owner customer.
+     * Get paginated loans with search, filters, sorting, and eager-loaded relations.
      */
-    public function getPaginatedLoans(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    public function getPaginatedLoans(array $filters = [], ?int $perPage = null, ?User $user = null): LengthAwarePaginator
     {
-        return Loan::query()
-            ->with('customer')
-            ->filter($filters)
-            ->latest()
-            ->paginate($perPage);
+        $perPage = (int) ($filters['per_page'] ?? $perPage ?? 15);
+        $user    = $user ?? auth()->user();
+
+        $query = Loan::query()
+            ->with('customer.branch')
+            ->filter($filters);
+
+        // Role-based restrictions hook (extensible for future role-scoping without separate endpoints)
+
+        $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
+        $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
+        $sortDirection = in_array($sortDirection, ['asc', 'desc'], true) ? $sortDirection : 'desc';
+
+        if ($sortColumn) {
+            $query->orderBy($sortColumn, $sortDirection);
+        } else {
+            $query->latest();
+        }
+
+        return $query->paginate($perPage);
     }
 
     /**
