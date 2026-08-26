@@ -72,22 +72,36 @@ class Account extends Model
     }
 
     /**
-     * Scope query to active accounts.
+     * Scope query to search by account number, customer name, or customer number.
      */
-    public function scopeActive(Builder $query): Builder
+    public function scopeSearch(Builder $query, ?string $search): Builder
     {
-        return $query->where('status', 'active');
+        return $query->when($search, fn ($q) =>
+            $q->where(fn ($q) =>
+                $q->where('account_number', 'like', "%{$search}%")
+                  ->orWhereHas('customer', fn ($cq) =>
+                      $cq->where('full_name', 'like', "%{$search}%")
+                         ->orWhere('customer_number', 'like', "%{$search}%")
+                  )
+            )
+        );
     }
 
     /**
-     * Scope query to apply filters.
+     * Scope query to apply multiple attribute filters.
      */
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         return $query
+            ->search($filters['search'] ?? null)
             ->when($filters['customer_id'] ?? null, fn ($q, $c) => $q->where('customer_id', $c))
             ->when($filters['type'] ?? null,        fn ($q, $t) => $q->where('account_type', $t))
             ->when($filters['status'] ?? null,      fn ($q, $s) => $q->where('status', $s))
-            ->when($filters['currency'] ?? null,    fn ($q, $c) => $q->where('currency', $c));
+            ->when($filters['currency'] ?? null,    fn ($q, $c) => $q->where('currency', $c))
+            ->when($filters['branch_id'] ?? null,   fn ($q, $b) =>
+                $q->whereHas('customer', fn ($cq) => $cq->where('branch_id', $b))
+            )
+            ->when(isset($filters['balance_min']), fn ($q) => $q->where('balance', '>=', $filters['balance_min']))
+            ->when(isset($filters['balance_max']), fn ($q) => $q->where('balance', '<=', $filters['balance_max']));
     }
 }
