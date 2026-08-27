@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Alert\AssignAlertRequest;
+use App\Http\Requests\Alert\IndexAlertRequest;
 use App\Http\Resources\AlertResource;
 use App\Services\AlertService;
 use Illuminate\Http\JsonResponse;
@@ -17,12 +18,13 @@ class AlertController extends Controller
     ) {}
 
     /**
-     * List alerts with optional filters.
+     * List alerts with search, filters, sorting, and role-based scoping.
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(IndexAlertRequest $request): AnonymousResourceCollection
     {
         $alerts = $this->alertService->getPaginatedAlerts(
-            $request->only(['severity', 'status', 'assigned_to', 'alert_type'])
+            $request->validated(),
+            user: $request->user()
         );
 
         return AlertResource::collection($alerts);
