@@ -20,6 +20,7 @@ class TransactionTest extends TestCase
     private User $compliance;
     private User $csr;
     private User $auditor;
+    private User $manager;
     private Branch $branch;
     private Customer $customer;
     private Account $account;
@@ -33,6 +34,7 @@ class TransactionTest extends TestCase
         $this->compliance = User::factory()->create(['role' => 'compliance', 'status' => 'active', 'branch_id' => $this->branch->id]);
         $this->csr        = User::factory()->create(['role' => 'csr',        'status' => 'active', 'branch_id' => $this->branch->id]);
         $this->auditor    = User::factory()->create(['role' => 'auditor',    'status' => 'active', 'branch_id' => $this->branch->id]);
+        $this->manager    = User::factory()->create(['role' => 'manager',    'status' => 'active', 'branch_id' => $this->branch->id]);
         $this->customer   = Customer::factory()->create(['branch_id' => $this->branch->id]);
         $this->account    = Account::factory()->create([
             'customer_id' => $this->customer->id,
@@ -56,6 +58,64 @@ class TransactionTest extends TestCase
                     '*' => ['id', 'transaction_number', 'transaction_type', 'amount', 'status'],
                 ],
             ]);
+    }
+
+    public function test_compliance_officer_only_sees_compliance_and_suspicious_transactions(): void
+    {
+        Sanctum::actingAs($this->compliance);
+
+        // Compliance-relevant transactions
+        $t1 = Transaction::factory()->create(['account_id' => $this->account->id, 'status' => 'flagged', 'amount' => 100]);
+        $t2 = Transaction::factory()->create(['account_id' => $this->account->id, 'status' => 'completed', 'amount' => 15000]);
+        $t3 = Transaction::factory()->create(['account_id' => $this->account->id, 'status' => 'completed', 'transaction_type' => 'wire', 'amount' => 200]);
+
+        // Regular transaction (not flagged, <10000, not wire, no alerts)
+        Transaction::factory()->create(['account_id' => $this->account->id, 'status' => 'completed', 'transaction_type' => 'deposit', 'amount' => 500]);
+
+        $response = $this->getJson('/api/transactions');
+
+        $response->assertStatus(200);
+        $this->assertCount(3, $response->json('data'));
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($t1->id, $ids);
+        $this->assertContains($t2->id, $ids);
+        $this->assertContains($t3->id, $ids);
+    }
+
+    public function test_manager_only_sees_transactions_in_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->manager);
+
+        $otherBranch   = Branch::factory()->create(['status' => 'active']);
+        $otherCustomer = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+        $otherAccount  = Account::factory()->create(['customer_id' => $otherCustomer->id]);
+
+        $t1 = Transaction::factory()->create(['account_id' => $this->account->id]);
+        $t2 = Transaction::factory()->create(['account_id' => $otherAccount->id]);
+
+        $response = $this->getJson('/api/transactions');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($t1->id, $response->json('data.0.id'));
+    }
+
+    public function test_csr_only_sees_transactions_in_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->csr);
+
+        $otherBranch   = Branch::factory()->create(['status' => 'active']);
+        $otherCustomer = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+        $otherAccount  = Account::factory()->create(['customer_id' => $otherCustomer->id]);
+
+        $t1 = Transaction::factory()->create(['account_id' => $this->account->id]);
+        $t2 = Transaction::factory()->create(['account_id' => $otherAccount->id]);
+
+        $response = $this->getJson('/api/transactions');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($t1->id, $response->json('data.0.id'));
     }
 
     public function test_transactions_can_be_filtered_by_account_id(): void
