@@ -46,6 +46,22 @@ class UserTest extends TestCase
             ]);
     }
 
+    public function test_manager_only_sees_employees_in_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->manager);
+
+        $otherBranch = Branch::factory()->create(['status' => 'active']);
+        $u1 = User::factory()->create(['role' => 'csr', 'branch_id' => $this->branch->id]);
+        $u2 = User::factory()->create(['role' => 'csr', 'branch_id' => $otherBranch->id]);
+
+        $response = $this->getJson('/api/users');
+
+        $response->assertStatus(200);
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($u1->id, $ids);
+        $this->assertNotContains($u2->id, $ids);
+    }
+
     public function test_users_can_be_searched_by_name_email_and_phone(): void
     {
         Sanctum::actingAs($this->admin);
