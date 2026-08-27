@@ -29,8 +29,11 @@ class AccountService
             ->with('customer.branch')
             ->filter($filters);
 
-        // Role-based restrictions hook (extend here without new endpoints)
-        // e.g. if ($user?->role === 'manager') { $query->whereHas('customer', fn ($q) => $q->where('branch_id', $user->branch_id)); }
+        // Role-based restrictions hook
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            // Manager & CSR only see accounts belonging to customers in their branch
+            $query->whereHas('customer', fn ($q) => $q->where('branch_id', $user->branch_id));
+        }
 
         $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
         $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
