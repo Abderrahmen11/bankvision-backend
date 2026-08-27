@@ -32,7 +32,21 @@ class TransactionService
             ->with(['account.customer', 'approver'])
             ->filter($filters);
 
-        // Role-based restrictions hook (extensible for future role-scoping without separate endpoints)
+        // Role-based restrictions hook
+        if ($user && $user->role === 'compliance') {
+            // Compliance officers monitor transactions relevant to compliance and suspicious activity:
+            // flagged status, high value (>= 10000), wire transfers, or transactions with triggered alerts
+            $query->where(function ($q) {
+                $q->where('status', 'flagged')
+                  ->orWhere('amount', '>=', 10000)
+                  ->orWhere('transaction_type', 'wire')
+                  ->orWhereHas('alerts');
+            });
+        } elseif ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            // Manager & CSR only see transactions belonging to accounts in their branch
+            $query->whereHas('account.customer', fn ($q) => $q->where('branch_id', $user->branch_id));
+        }
+        // Admin, Analyst, Auditor: full bank-wide read access — no additional restriction applied
 
         $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
         $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
