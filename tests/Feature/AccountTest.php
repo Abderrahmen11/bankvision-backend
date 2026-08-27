@@ -18,6 +18,7 @@ class AccountTest extends TestCase
     private User $admin;
     private User $csr;
     private User $auditor;
+    private User $manager;
     private Branch $branch;
     private Customer $customer;
 
@@ -29,6 +30,7 @@ class AccountTest extends TestCase
         $this->admin    = User::factory()->create(['role' => 'admin',   'status' => 'active', 'branch_id' => $this->branch->id]);
         $this->csr      = User::factory()->create(['role' => 'csr',     'status' => 'active', 'branch_id' => $this->branch->id]);
         $this->auditor  = User::factory()->create(['role' => 'auditor', 'status' => 'active', 'branch_id' => $this->branch->id]);
+        $this->manager  = User::factory()->create(['role' => 'manager', 'status' => 'active', 'branch_id' => $this->branch->id]);
         $this->customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
     }
 
