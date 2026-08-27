@@ -46,7 +46,11 @@ class LoanService
             ->with('customer.branch')
             ->filter($filters);
 
-        // Role-based restrictions hook (extensible for future role-scoping without separate endpoints)
+        // Role-based restrictions hook
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            // Manager & CSR only see loans belonging to customers in their branch
+            $query->whereHas('customer', fn ($q) => $q->where('branch_id', $user->branch_id));
+        }
 
         $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
         $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
