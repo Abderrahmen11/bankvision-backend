@@ -366,4 +366,25 @@ class AccountTest extends TestCase
         $this->assertCount(1, $response->json('data'));
         $this->assertEquals('deposit', $response->json('data.0.transaction_type'));
     }
+
+    public function test_csr_only_sees_accounts_in_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->csr);
+
+        $otherBranch = Branch::factory()->create(['status' => 'active']);
+        $customer1 = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $a1 = Account::factory()->create(['customer_id' => $customer1->id]);
+
+        $customer2 = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+        $a2 = Account::factory()->create(['customer_id' => $customer2->id]);
+
+        $response = $this->getJson('/api/accounts');
+
+        $response->assertStatus(200);
+        $ids = collect($response->json('data'))->pluck('id')->all();
+
+        $this->assertContains($a1->id, $ids);
+        $this->assertNotContains($a2->id, $ids);
+    }
 }
+
