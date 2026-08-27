@@ -407,4 +407,22 @@ class CustomerTest extends TestCase
         $response->assertStatus(200);
         $this->assertCount(2, $response->json('data'));
     }
+
+    public function test_csr_only_sees_customers_in_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->csr);
+
+        $otherBranch = Branch::factory()->create(['status' => 'active']);
+        $c1 = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $c2 = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+
+        $response = $this->getJson('/api/customers');
+
+        $response->assertStatus(200);
+        $ids = collect($response->json('data'))->pluck('id')->all();
+
+        $this->assertContains($c1->id, $ids);
+        $this->assertNotContains($c2->id, $ids);
+    }
 }
+
