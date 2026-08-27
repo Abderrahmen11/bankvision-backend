@@ -51,6 +51,23 @@ class AccountTest extends TestCase
             ]);
     }
 
+    public function test_manager_only_sees_accounts_in_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->manager);
+
+        $otherBranch   = Branch::factory()->create(['status' => 'active']);
+        $otherCustomer = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+
+        $a1 = Account::factory()->create(['customer_id' => $this->customer->id]);
+        $a2 = Account::factory()->create(['customer_id' => $otherCustomer->id]);
+
+        $response = $this->getJson('/api/accounts');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($a1->id, $response->json('data.0.id'));
+    }
+
     public function test_accounts_can_be_filtered_by_status(): void
     {
         Sanctum::actingAs($this->csr);
