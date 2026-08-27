@@ -29,7 +29,12 @@ class UserService
             ->with('branch')
             ->filter($filters);
 
-        // Role-based restrictions hook (extensible for future role-scoping without separate endpoints)
+        // Role-based restrictions hook
+        if ($user && $user->role === 'manager' && $user->branch_id) {
+            // Manager only sees employees belonging to their assigned branch
+            $query->where('branch_id', $user->branch_id);
+        }
+        // Admin, Analyst, Auditor, Compliance: full bank-wide read access — no additional restriction applied
 
         $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
         $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
