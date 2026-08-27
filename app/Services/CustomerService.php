@@ -23,10 +23,20 @@ class CustomerService
             ->withCount(['accounts', 'loans'])
             ->filter($filters);
 
-        // Role-based restrictions hook (extensible for future role-scoping without separate endpoints)
-        if ($user && $user->role === 'manager' && $user->branch_id) {
-            // E.g. $query->where('branch_id', $user->branch_id);
+        // Role-based restrictions hook
+        if ($user && $user->role === 'compliance') {
+            // Compliance officers see customers relevant to KYC/compliance:
+            // non-verified KYC, medium/high risk level, or customers with alerts
+            $query->where(function ($q) {
+                $q->whereIn('kyc_status', ['pending', 'expired', 'rejected'])
+                  ->orWhereIn('risk_level', ['medium', 'high'])
+                  ->orWhereHas('alerts');
+            });
+        } elseif ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            // Manager & CSR only see customers belonging to their assigned branch
+            $query->where('branch_id', $user->branch_id);
         }
+        // Admin, Analyst, Auditor: full bank-wide read access — no additional restriction applied
 
         // Sorting by registration_date or specified column with direction
         $sortBy = $filters['sort_by'] ?? ($filters['sort_direction'] ?? $filters['direction'] ?? $filters['order'] ?? null ? 'registration_date' : null);
