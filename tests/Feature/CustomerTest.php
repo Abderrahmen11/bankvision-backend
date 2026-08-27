@@ -19,17 +19,19 @@ class CustomerTest extends TestCase
     private User $manager;
     private User $csr;
     private User $auditor;
+    private User $compliance;
     private Branch $branch;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->branch  = Branch::factory()->create(['status' => 'active']);
-        $this->admin   = User::factory()->create(['role' => 'admin',   'status' => 'active', 'branch_id' => $this->branch->id]);
-        $this->manager = User::factory()->create(['role' => 'manager', 'status' => 'active', 'branch_id' => $this->branch->id]);
-        $this->csr     = User::factory()->create(['role' => 'csr',     'status' => 'active', 'branch_id' => $this->branch->id]);
-        $this->auditor = User::factory()->create(['role' => 'auditor', 'status' => 'active', 'branch_id' => $this->branch->id]);
+        $this->branch     = Branch::factory()->create(['status' => 'active']);
+        $this->admin      = User::factory()->create(['role' => 'admin',      'status' => 'active', 'branch_id' => $this->branch->id]);
+        $this->manager    = User::factory()->create(['role' => 'manager',    'status' => 'active', 'branch_id' => $this->branch->id]);
+        $this->csr        = User::factory()->create(['role' => 'csr',        'status' => 'active', 'branch_id' => $this->branch->id]);
+        $this->auditor    = User::factory()->create(['role' => 'auditor',    'status' => 'active', 'branch_id' => $this->branch->id]);
+        $this->compliance = User::factory()->create(['role' => 'compliance', 'status' => 'active', 'branch_id' => $this->branch->id]);
     }
 
     // ─── Index ──────────────────────────────────────────────────────────────────
@@ -50,6 +52,41 @@ class CustomerTest extends TestCase
             ]);
 
         $this->assertCount(5, $response->json('data'));
+    }
+
+    public function test_compliance_officer_only_sees_kyc_and_compliance_relevant_customers(): void
+    {
+        Sanctum::actingAs($this->compliance);
+
+        // Compliance-relevant customers
+        $c1 = Customer::factory()->create(['branch_id' => $this->branch->id, 'kyc_status' => 'pending', 'risk_level' => 'low']);
+        $c2 = Customer::factory()->create(['branch_id' => $this->branch->id, 'kyc_status' => 'verified', 'risk_level' => 'high']);
+
+        // Non-compliance regular customer
+        Customer::factory()->create(['branch_id' => $this->branch->id, 'kyc_status' => 'verified', 'risk_level' => 'low']);
+
+        $response = $this->getJson('/api/customers');
+
+        $response->assertStatus(200);
+        $this->assertCount(2, $response->json('data'));
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($c1->id, $ids);
+        $this->assertContains($c2->id, $ids);
+    }
+
+    public function test_manager_only_sees_customers_in_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->manager);
+
+        $otherBranch = Branch::factory()->create(['status' => 'active']);
+        $c1 = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $c2 = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+
+        $response = $this->getJson('/api/customers');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($c1->id, $response->json('data.0.id'));
     }
 
     public function test_customers_can_be_filtered_by_search(): void
