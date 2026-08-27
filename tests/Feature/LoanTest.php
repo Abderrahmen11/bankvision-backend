@@ -51,6 +51,40 @@ class LoanTest extends TestCase
             ]);
     }
 
+    public function test_manager_only_sees_loans_in_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->manager);
+
+        $otherBranch   = Branch::factory()->create(['status' => 'active']);
+        $otherCustomer = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+
+        $l1 = Loan::factory()->create(['customer_id' => $this->customer->id]);
+        $l2 = Loan::factory()->create(['customer_id' => $otherCustomer->id]);
+
+        $response = $this->getJson('/api/loans');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($l1->id, $response->json('data.0.id'));
+    }
+
+    public function test_csr_only_sees_loans_in_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->csr);
+
+        $otherBranch   = Branch::factory()->create(['status' => 'active']);
+        $otherCustomer = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+
+        $l1 = Loan::factory()->create(['customer_id' => $this->customer->id]);
+        $l2 = Loan::factory()->create(['customer_id' => $otherCustomer->id]);
+
+        $response = $this->getJson('/api/loans');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($l1->id, $response->json('data.0.id'));
+    }
+
     public function test_loans_can_be_filtered_by_status(): void
     {
         Sanctum::actingAs($this->csr);
