@@ -77,14 +77,29 @@ class Alert extends Model
     }
 
     /**
+     * Scope query to search alerts by alert number or description.
+     */
+    public function scopeSearch(Builder $query, ?string $search): Builder
+    {
+        return $query->when($search, fn ($q) =>
+            $q->where(fn ($q) =>
+                $q->where('alert_number', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+            )
+        );
+    }
+
+    /**
      * Scope query to apply multiple attribute filters.
      */
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         return $query
+            ->search($filters['search'] ?? null)
             ->when($filters['severity'] ?? null,    fn ($q, $s) => $q->where('severity', $s))
             ->when($filters['status'] ?? null,      fn ($q, $s) => $q->where('status', $s))
             ->when($filters['assigned_to'] ?? null, fn ($q, $a) => $q->where('assigned_to', $a))
             ->when($filters['alert_type'] ?? null,  fn ($q, $t) => $q->where('alert_type', $t));
     }
 }
+
