@@ -18,6 +18,7 @@ class AlertTest extends TestCase
     private User $compliance;
     private User $csr;
     private User $analyst;
+    private User $manager;
     private Branch $branch;
 
     protected function setUp(): void
@@ -29,6 +30,7 @@ class AlertTest extends TestCase
         $this->compliance = User::factory()->create(['role' => 'compliance', 'status' => 'active', 'branch_id' => $this->branch->id]);
         $this->csr        = User::factory()->create(['role' => 'csr',        'status' => 'active', 'branch_id' => $this->branch->id]);
         $this->analyst    = User::factory()->create(['role' => 'analyst',    'status' => 'active', 'branch_id' => $this->branch->id]);
+        $this->manager    = User::factory()->create(['role' => 'manager',    'status' => 'active', 'branch_id' => $this->branch->id]);
     }
 
     // ─── Index ───────────────────────────────────────────────────────────────────
@@ -46,6 +48,33 @@ class AlertTest extends TestCase
                     '*' => ['id', 'alert_number', 'alert_type', 'severity', 'status'],
                 ],
             ]);
+    }
+
+    public function test_manager_only_sees_alerts_in_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->manager);
+
+        $otherBranch   = Branch::factory()->create(['status' => 'active']);
+        $cust1         = \App\Models\Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $cust2         = \App\Models\Customer::factory()->create(['branch_id' => $otherBranch->id]);
+
+        $a1 = Alert::factory()->create([
+            'alertable_type' => \App\Models\Customer::class,
+            'alertable_id'   => $cust1->id,
+            'assigned_to'    => null,
+        ]);
+        $a2 = Alert::factory()->create([
+            'alertable_type' => \App\Models\Customer::class,
+            'alertable_id'   => $cust2->id,
+            'assigned_to'    => null,
+        ]);
+
+        $response = $this->getJson('/api/alerts');
+
+        $response->assertStatus(200);
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($a1->id, $ids);
+        $this->assertNotContains($a2->id, $ids);
     }
 
     public function test_alerts_can_be_filtered_by_severity(): void
@@ -84,6 +113,32 @@ class AlertTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertCount(1, $response->json('data'));
+    }
+
+    public function test_alerts_can_be_searched_by_alert_number_or_description(): void
+    {
+        Sanctum::actingAs($this->compliance);
+        Alert::factory()->create(['alert_number' => 'ALT-2026-99991', 'description' => 'Fraudulent transfer activity']);
+        Alert::factory()->create(['alert_number' => 'ALT-2026-88882', 'description' => 'Standard routine check']);
+
+        $response = $this->getJson('/api/alerts?search=Fraudulent');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals('ALT-2026-99991', $response->json('data.0.alert_number'));
+    }
+
+    public function test_alerts_supports_pagination_and_sorting(): void
+    {
+        Sanctum::actingAs($this->compliance);
+        Alert::factory()->count(20)->create();
+
+        $response = $this->getJson('/api/alerts?per_page=5&page=2&sort_by=created_at&sort_direction=desc');
+
+        $response->assertStatus(200);
+        $this->assertCount(5, $response->json('data'));
+        $this->assertEquals(2, $response->json('meta.current_page'));
+        $this->assertEquals(5, $response->json('meta.per_page'));
     }
 
     // ─── Show ────────────────────────────────────────────────────────────────────
