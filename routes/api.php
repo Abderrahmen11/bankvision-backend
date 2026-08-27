@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
@@ -147,5 +148,15 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('users',        [UserController::class, 'store']);
         Route::put('users/{id}',    [UserController::class, 'update']);
         Route::delete('users/{id}', [UserController::class, 'destroy']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Audit Logs — admin, auditor, compliance
+    |----------------------------------------------------------------------
+    */
+    Route::middleware('role:admin,auditor,compliance')->group(function () {
+        Route::get('audit-logs',      [AuditLogController::class, 'index']);
+        Route::get('audit-logs/{id}', [AuditLogController::class, 'show']);
     });
 });
