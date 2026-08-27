@@ -32,14 +32,25 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | Dashboard
+    | Dashboard & Analytical Reports
     |----------------------------------------------------------------------
     */
     Route::prefix('dashboard')->group(function () {
         Route::get('/stats',           [DashboardController::class, 'stats']);
         Route::get('/chart-data',      [DashboardController::class, 'chartData']);
         Route::get('/recent-activity', [DashboardController::class, 'recentActivity']);
+        Route::get('/risk-analysis',   [DashboardController::class, 'riskAnalysis']);
+        Route::get('/reports',         [DashboardController::class, 'reports']);
+
+        // Auditor investigation dashboard
+        Route::middleware('role:admin,auditor')->group(function () {
+            Route::get('/audit-stats',  [DashboardController::class, 'auditStats']);
+            Route::get('/audit-report', [DashboardController::class, 'auditReport']);
+        });
     });
+
+    Route::get('reports',               [DashboardController::class, 'reports']);
+    Route::get('reports/risk-analysis', [DashboardController::class, 'riskAnalysis']);
 
     /*
     |----------------------------------------------------------------------
