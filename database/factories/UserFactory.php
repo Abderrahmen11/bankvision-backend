@@ -19,6 +19,28 @@ class UserFactory extends Factory
     protected static ?string $password;
 
     /**
+     * Role distribution weights (admin is never generated — only via UserSeeder).
+     * manager 30% | csr 25% | compliance 20% | analyst 15% | auditor 10%
+     */
+    private const ROLE_WEIGHTS = [
+        'manager'    => 30,
+        'csr'        => 25,
+        'compliance' => 20,
+        'analyst'    => 15,
+        'auditor'    => 10,
+    ];
+
+    /**
+     * Status distribution weights.
+     * active 70% | suspended 20% | pending 10%
+     */
+    private const STATUS_WEIGHTS = [
+        'active'    => 70,
+        'suspended' => 20,
+        'pending'   => 10,
+    ];
+
+    /**
      * Define the model's default state.
      *
      * @return array<string, mixed>
@@ -26,26 +48,107 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
+            'name'              => fake()->name(),
+            'email'             => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
-            'remember_token' => Str::random(10),
-            'role' => fake()->randomElement(['admin', 'manager', 'compliance', 'analyst', 'csr', 'auditor']),
-            'branch_id' => Branch::inRandomOrder()->first()?->id ?? Branch::factory(),
-            'status' => fake()->randomElement(['pending', 'active', 'suspended']),
-            'last_login_at' => fake()->optional(0.8)->dateTimeThisYear(),
-            'phone' => fake()->phoneNumber(),
+            'password'          => static::$password ??= Hash::make('password'),
+            'remember_token'    => Str::random(10),
+            'role'              => $this->weightedRandom(self::ROLE_WEIGHTS),
+            'status'            => $this->weightedRandom(self::STATUS_WEIGHTS),
+            'branch_id'         => Branch::inRandomOrder()->first()?->id ?? Branch::factory(),
+            'last_login_at'     => fake()->optional(0.8)->dateTimeThisYear(),
+            'phone'             => fake()->phoneNumber(),
         ];
     }
+
+    // -------------------------------------------------------------------------
+    // Role state methods
+    // -------------------------------------------------------------------------
+
+    public function admin(): static
+    {
+        return $this->state(fn () => ['role' => 'admin']);
+    }
+
+    public function manager(): static
+    {
+        return $this->state(fn () => ['role' => 'manager']);
+    }
+
+    public function compliance(): static
+    {
+        return $this->state(fn () => ['role' => 'compliance']);
+    }
+
+    public function analyst(): static
+    {
+        return $this->state(fn () => ['role' => 'analyst']);
+    }
+
+    public function csr(): static
+    {
+        return $this->state(fn () => ['role' => 'csr']);
+    }
+
+    public function auditor(): static
+    {
+        return $this->state(fn () => ['role' => 'auditor']);
+    }
+
+    // -------------------------------------------------------------------------
+    // Status state methods
+    // -------------------------------------------------------------------------
+
+    public function active(): static
+    {
+        return $this->state(fn () => ['status' => 'active']);
+    }
+
+    public function suspended(): static
+    {
+        return $this->state(fn () => ['status' => 'suspended']);
+    }
+
+    public function pending(): static
+    {
+        return $this->state(fn () => ['status' => 'pending']);
+    }
+
+    // -------------------------------------------------------------------------
+    // Misc state methods
+    // -------------------------------------------------------------------------
 
     /**
      * Indicate that the model's email address should be unverified.
      */
     public function unverified(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'email_verified_at' => null,
-        ]);
+        return $this->state(fn () => ['email_verified_at' => null]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Pick a random key from a weighted array.
+     * e.g. ['a' => 70, 'b' => 30] → 'a' 70% of the time.
+     *
+     * @param  array<string, int>  $weights
+     */
+    private function weightedRandom(array $weights): string
+    {
+        $total      = array_sum($weights);
+        $rand       = mt_rand(1, $total);
+        $cumulative = 0;
+
+        foreach ($weights as $key => $weight) {
+            $cumulative += $weight;
+            if ($rand <= $cumulative) {
+                return $key;
+            }
+        }
+
+        return array_key_first($weights);
     }
 }
