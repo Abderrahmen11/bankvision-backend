@@ -86,7 +86,13 @@ class AuthorizationRoleTest extends TestCase
 
     public function test_transaction_approval_permissions(): void
     {
-        $flaggedTxn = Transaction::factory()->create(['status' => 'flagged', 'amount' => 500]);
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $account  = Account::factory()->create(['customer_id' => $customer->id]);
+        $flaggedTxn = Transaction::factory()->create([
+            'account_id' => $account->id,
+            'status'     => 'flagged',
+            'amount'     => 500,
+        ]);
 
         // CSR cannot approve
         Sanctum::actingAs($this->csr);
@@ -100,14 +106,22 @@ class AuthorizationRoleTest extends TestCase
         Sanctum::actingAs($this->auditor);
         $this->postJson("/api/transactions/{$flaggedTxn->id}/approve")->assertStatus(403);
 
-        // Compliance can approve
+        // Compliance cannot approve transactions (per role matrix)
         Sanctum::actingAs($this->compliance);
+        $this->postJson("/api/transactions/{$flaggedTxn->id}/approve")->assertStatus(403);
+
+        // Manager can approve in their branch
+        Sanctum::actingAs($this->manager);
         $this->postJson("/api/transactions/{$flaggedTxn->id}/approve")->assertStatus(200);
     }
 
     public function test_loan_approval_permissions(): void
     {
-        $pendingLoan = Loan::factory()->create(['status' => 'pending']);
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $pendingLoan = Loan::factory()->create([
+            'customer_id' => $customer->id,
+            'status'      => 'pending',
+        ]);
 
         // CSR cannot approve loan
         Sanctum::actingAs($this->csr);
@@ -117,14 +131,19 @@ class AuthorizationRoleTest extends TestCase
         Sanctum::actingAs($this->compliance);
         $this->postJson("/api/loans/{$pendingLoan->id}/approve")->assertStatus(403);
 
-        // Manager can approve loan
+        // Manager can approve loan in their branch
         Sanctum::actingAs($this->manager);
         $this->postJson("/api/loans/{$pendingLoan->id}/approve")->assertStatus(200);
     }
 
     public function test_alert_resolution_permissions(): void
     {
-        $alert = Alert::factory()->create(['status' => 'open']);
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $alert = Alert::factory()->create([
+            'alertable_type' => Customer::class,
+            'alertable_id'   => $customer->id,
+            'status'         => 'open',
+        ]);
 
         // CSR cannot resolve alert
         Sanctum::actingAs($this->csr);
@@ -137,6 +156,53 @@ class AuthorizationRoleTest extends TestCase
         // Compliance can resolve alert
         Sanctum::actingAs($this->compliance);
         $this->postJson("/api/alerts/{$alert->id}/resolve")->assertStatus(200);
+    }
+
+    public function test_csr_restricted_endpoints(): void
+    {
+        Sanctum::actingAs($this->csr);
+
+        // CSR cannot view staff list
+        $this->getJson('/api/users')->assertStatus(403);
+
+        // CSR cannot view performance reports
+        $this->getJson('/api/reports')->assertStatus(403);
+        $this->getJson('/api/dashboard/reports')->assertStatus(403);
+
+        // CSR cannot view audit logs
+        $this->getJson('/api/audit-logs')->assertStatus(403);
+
+        // CSR cannot create loans
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $this->postJson('/api/loans', [
+            'customer_id'      => $customer->id,
+            'loan_type'        => 'personal',
+            'principal_amount' => 5000,
+            'interest_rate'    => 5.0,
+            'term_months'      => 12,
+            'start_date'       => now()->toDateString(),
+        ])->assertStatus(403);
+
+        // CSR cannot close accounts
+        $account = Account::factory()->create(['customer_id' => $customer->id]);
+        $this->deleteJson("/api/accounts/{$account->id}")->assertStatus(403);
+    }
+
+    public function test_branch_manager_scoping(): void
+    {
+        Sanctum::actingAs($this->manager);
+
+        // Manager can view audit logs for their branch
+        $this->getJson('/api/audit-logs')->assertStatus(200);
+
+        // Manager cannot access data from another branch
+        $otherBranch   = Branch::factory()->create(['status' => 'active']);
+        $otherCustomer = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+        $otherAccount  = Account::factory()->create(['customer_id' => $otherCustomer->id]);
+
+        $this->getJson("/api/branches/{$otherBranch->id}")->assertStatus(403);
+        $this->getJson("/api/customers/{$otherCustomer->id}")->assertStatus(403);
+        $this->getJson("/api/accounts/{$otherAccount->id}")->assertStatus(403);
     }
 
     public function test_all_authenticated_roles_can_read_dashboard_stats(): void
