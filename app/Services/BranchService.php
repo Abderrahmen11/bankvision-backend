@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class BranchService
 {
@@ -30,7 +31,10 @@ class BranchService
             ->withCount('users')
             ->filter($filters);
 
-        // Role-based restrictions hook (extensible for future role-scoping without separate endpoints)
+        // Branch Managers and CSRs see only their assigned branch
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            $query->where('id', $user->branch_id);
+        }
 
         $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
         $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
@@ -48,8 +52,16 @@ class BranchService
     /**
      * Find single branch with manager.
      */
-    public function getBranchDetails(string|int $id): Branch
+    public function getBranchDetails(string|int $id, ?User $user = null): Branch
     {
+        $user = $user ?? auth()->user();
+
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            if ((int) $id !== (int) $user->branch_id) {
+                throw new AccessDeniedHttpException('Access forbidden. You may only access your assigned branch.');
+            }
+        }
+
         return Branch::with('manager')
             ->withCount('users')
             ->findOrFail($id);
