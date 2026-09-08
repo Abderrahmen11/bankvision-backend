@@ -37,9 +37,9 @@ class CustomerController extends Controller
     /**
      * Show a single customer with details.
      */
-    public function show(string $id): CustomerResource
+    public function show(Request $request, string $id): CustomerResource
     {
-        $customer = $this->customerService->getCustomerDetails($id);
+        $customer = $this->customerService->getCustomerDetails($id, $request->user());
 
         return CustomerResource::make($customer);
     }
@@ -49,7 +49,7 @@ class CustomerController extends Controller
      */
     public function store(StoreCustomerRequest $request): JsonResponse
     {
-        $customer = $this->customerService->createCustomer($request->validated());
+        $customer = $this->customerService->createCustomer($request->validated(), $request->user());
 
         return response()->json([
             'success' => true,
@@ -63,7 +63,7 @@ class CustomerController extends Controller
      */
     public function update(UpdateCustomerRequest $request, string $id): JsonResponse
     {
-        $updated = $this->customerService->updateCustomer($id, $request->validated());
+        $updated = $this->customerService->updateCustomer($id, $request->validated(), $request->user());
 
         return response()->json([
             'success' => true,
@@ -88,9 +88,9 @@ class CustomerController extends Controller
     /**
      * List all accounts belonging to a specific customer.
      */
-    public function accounts(string $id): AnonymousResourceCollection
+    public function accounts(Request $request, string $id): AnonymousResourceCollection
     {
-        $accounts = $this->customerService->getCustomerAccounts($id);
+        $accounts = $this->customerService->getCustomerAccounts($id, 15, $request->user());
 
         return AccountResource::collection($accounts);
     }
@@ -98,9 +98,9 @@ class CustomerController extends Controller
     /**
      * List all loans belonging to a specific customer.
      */
-    public function loans(string $id): AnonymousResourceCollection
+    public function loans(Request $request, string $id): AnonymousResourceCollection
     {
-        $loans = $this->customerService->getCustomerLoans($id);
+        $loans = $this->customerService->getCustomerLoans($id, 15, $request->user());
 
         return LoanResource::collection($loans);
     }
