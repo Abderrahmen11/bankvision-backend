@@ -32,7 +32,7 @@ class BranchTest extends TestCase
 
     public function test_authenticated_user_can_list_branches(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->admin);
         Branch::factory()->count(3)->create();
 
         $response = $this->getJson('/api/branches');
@@ -45,9 +45,33 @@ class BranchTest extends TestCase
             ]);
     }
 
-    public function test_branches_can_be_filtered_by_status(): void
+    public function test_manager_only_sees_assigned_branch(): void
+    {
+        Sanctum::actingAs($this->manager);
+        Branch::factory()->count(3)->create();
+
+        $response = $this->getJson('/api/branches');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($this->branch->id, $response->json('data.0.id'));
+    }
+
+    public function test_csr_only_sees_assigned_branch(): void
     {
         Sanctum::actingAs($this->csr);
+        Branch::factory()->count(3)->create();
+
+        $response = $this->getJson('/api/branches');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals($this->branch->id, $response->json('data.0.id'));
+    }
+
+    public function test_branches_can_be_filtered_by_status(): void
+    {
+        Sanctum::actingAs($this->admin);
         Branch::factory()->create(['status' => 'active']);
         Branch::factory()->create(['status' => 'inactive']);
 
@@ -61,7 +85,7 @@ class BranchTest extends TestCase
 
     public function test_branches_can_be_searched_by_name(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->admin);
         $uniqueTerm = 'XQZFINCTR' . uniqid();
         Branch::factory()->create(['branch_name' => $uniqueTerm . ' Center', 'city' => 'Boston']);
         Branch::factory()->create(['branch_name' => 'Uptown Branch', 'city' => 'Boston']);
@@ -75,7 +99,7 @@ class BranchTest extends TestCase
 
     public function test_branches_can_be_searched_by_phone_and_code(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->admin);
         $target = Branch::factory()->create([
             'branch_code' => 'BR-SEARCH-99',
             'phone'       => '+1-555-888-9999',
@@ -118,24 +142,27 @@ class BranchTest extends TestCase
 
     public function test_branches_can_be_sorted_by_name_and_code(): void
     {
-        Sanctum::actingAs($this->csr);
-        Branch::factory()->create(['branch_name' => 'Alpha Branch', 'branch_code' => 'BR-001']);
-        Branch::factory()->create(['branch_name' => 'Zulu Branch',  'branch_code' => 'BR-999']);
+        Sanctum::actingAs($this->admin);
+        // Clear previous branches or ensure deterministic order
+        $uniqueA = 'AAAA ' . uniqid();
+        $uniqueZ = 'ZZZZ ' . uniqid();
+        $b1 = Branch::factory()->create(['branch_name' => $uniqueA, 'branch_code' => 'BR-001']);
+        $b2 = Branch::factory()->create(['branch_name' => $uniqueZ, 'branch_code' => 'BR-999']);
 
         // Ascending by name
         $resAsc = $this->getJson('/api/branches?sort_by=branch_name&sort_direction=asc');
         $resAsc->assertStatus(200);
-        $this->assertEquals('Alpha Branch', $resAsc->json('data.0.branch_name'));
+        $this->assertEquals($uniqueA, $resAsc->json('data.0.branch_name'));
 
         // Descending by name
         $resDesc = $this->getJson('/api/branches?sort_by=branch_name&sort_direction=desc');
         $resDesc->assertStatus(200);
-        $this->assertEquals('Zulu Branch', $resDesc->json('data.0.branch_name'));
+        $this->assertEquals($uniqueZ, $resDesc->json('data.0.branch_name'));
     }
 
     public function test_branches_pagination_defaults_to_15_per_page(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->admin);
         Branch::factory()->count(20)->create();
 
         $response = $this->getJson('/api/branches');
@@ -147,7 +174,7 @@ class BranchTest extends TestCase
 
     public function test_branches_supports_custom_per_page_and_page(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->admin);
         Branch::factory()->count(20)->create();
 
         $response = $this->getJson('/api/branches?per_page=5&page=2');
@@ -160,7 +187,7 @@ class BranchTest extends TestCase
 
     public function test_branch_response_includes_manager(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->admin);
         $branchWithManager = Branch::factory()->create(['manager_id' => $this->manager->id]);
 
         $response = $this->getJson('/api/branches');
@@ -191,9 +218,25 @@ class BranchTest extends TestCase
             ->assertJsonStructure(['data' => ['id', 'branch_code', 'branch_name', 'status', 'total_employees']]);
     }
 
-    public function test_show_returns_404_for_non_existent_branch(): void
+    public function test_manager_cannot_view_other_branch(): void
+    {
+        Sanctum::actingAs($this->manager);
+        $otherBranch = Branch::factory()->create(['status' => 'active']);
+
+        $this->getJson("/api/branches/{$otherBranch->id}")->assertStatus(403);
+    }
+
+    public function test_csr_cannot_view_other_branch(): void
     {
         Sanctum::actingAs($this->csr);
+        $otherBranch = Branch::factory()->create(['status' => 'active']);
+
+        $this->getJson("/api/branches/{$otherBranch->id}")->assertStatus(403);
+    }
+
+    public function test_show_returns_404_for_non_existent_branch(): void
+    {
+        Sanctum::actingAs($this->admin);
         $this->getJson('/api/branches/999999')->assertStatus(404);
     }
 
