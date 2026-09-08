@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DashboardLayoutController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UserController;
@@ -36,11 +37,19 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     |----------------------------------------------------------------------
     */
     Route::prefix('dashboard')->group(function () {
+        Route::get('/layout',          [DashboardLayoutController::class, 'index']);
+        Route::put('/layout',          [DashboardLayoutController::class, 'update']);
+        Route::post('/layout/reset',   [DashboardLayoutController::class, 'reset']);
+
         Route::get('/stats',           [DashboardController::class, 'stats']);
         Route::get('/chart-data',      [DashboardController::class, 'chartData']);
         Route::get('/recent-activity', [DashboardController::class, 'recentActivity']);
         Route::get('/risk-analysis',   [DashboardController::class, 'riskAnalysis']);
-        Route::get('/reports',         [DashboardController::class, 'reports']);
+
+        // Reports restricted from CSR
+        Route::middleware('role:admin,manager,compliance,analyst,auditor')->group(function () {
+            Route::get('/reports', [DashboardController::class, 'reports']);
+        });
 
         // Auditor investigation dashboard
         Route::middleware('role:admin,auditor')->group(function () {
@@ -49,8 +58,10 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         });
     });
 
-    Route::get('reports',               [DashboardController::class, 'reports']);
-    Route::get('reports/risk-analysis', [DashboardController::class, 'riskAnalysis']);
+    Route::middleware('role:admin,manager,compliance,analyst,auditor')->group(function () {
+        Route::get('reports',               [DashboardController::class, 'reports']);
+        Route::get('reports/risk-analysis', [DashboardController::class, 'riskAnalysis']);
+    });
 
     /*
     |----------------------------------------------------------------------
@@ -68,7 +79,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | Customers — csr, manager, admin, compliance can read; admin/manager write
+    | Customers — csr, manager, admin, compliance read; updates restricted per role
     |----------------------------------------------------------------------
     */
     Route::get('customers',                     [CustomerController::class, 'index']);
@@ -78,6 +89,9 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     Route::middleware('role:admin,manager,csr')->group(function () {
         Route::post('customers',       [CustomerController::class, 'store']);
+    });
+
+    Route::middleware('role:admin,manager,csr,compliance')->group(function () {
         Route::put('customers/{id}',   [CustomerController::class, 'update']);
     });
 
@@ -87,7 +101,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | Accounts
+    | Accounts — CSR creates basic accounts; only manager & admin update/close
     |----------------------------------------------------------------------
     */
     Route::get('accounts',                          [AccountController::class, 'index']);
@@ -95,14 +109,17 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('accounts/{id}/transactions',        [AccountController::class, 'transactions']);
 
     Route::middleware('role:admin,manager,csr')->group(function () {
-        Route::post('accounts',      [AccountController::class, 'store']);
-        Route::put('accounts/{id}',  [AccountController::class, 'update']);
+        Route::post('accounts',        [AccountController::class, 'store']);
+    });
+
+    Route::middleware('role:admin,manager')->group(function () {
+        Route::put('accounts/{id}',    [AccountController::class, 'update']);
         Route::delete('accounts/{id}', [AccountController::class, 'destroy']);
     });
 
     /*
     |----------------------------------------------------------------------
-    | Transactions
+    | Transactions — CSR/manager/admin record; only manager/admin approve; manager/admin/compliance flag
     |----------------------------------------------------------------------
     */
     Route::get('transactions',         [TransactionController::class, 'index']);
@@ -112,25 +129,25 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('transactions', [TransactionController::class, 'store']);
     });
 
-    Route::middleware('role:admin,manager,compliance')->group(function () {
+    Route::middleware('role:admin,manager')->group(function () {
         Route::post('transactions/{id}/approve', [TransactionController::class, 'approve']);
+    });
+
+    Route::middleware('role:admin,manager,compliance')->group(function () {
         Route::post('transactions/{id}/flag',    [TransactionController::class, 'flag']);
     });
 
     /*
     |----------------------------------------------------------------------
-    | Loans
+    | Loans — CSR is read-only; manager & admin create/update/approve
     |----------------------------------------------------------------------
     */
     Route::get('loans',         [LoanController::class, 'index']);
     Route::get('loans/{id}',    [LoanController::class, 'show']);
 
-    Route::middleware('role:admin,manager,csr')->group(function () {
-        Route::post('loans',       [LoanController::class, 'store']);
-        Route::put('loans/{id}',   [LoanController::class, 'update']);
-    });
-
     Route::middleware('role:admin,manager')->group(function () {
+        Route::post('loans',              [LoanController::class, 'store']);
+        Route::put('loans/{id}',          [LoanController::class, 'update']);
         Route::post('loans/{id}/approve', [LoanController::class, 'approve']);
     });
 
@@ -149,11 +166,13 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | Users — staff read, admin full management
+    | Users — CSR cannot view staff list; admin manages
     |----------------------------------------------------------------------
     */
-    Route::get('users',         [UserController::class, 'index']);
-    Route::get('users/{id}',    [UserController::class, 'show']);
+    Route::middleware('role:admin,manager,compliance,analyst,auditor')->group(function () {
+        Route::get('users',         [UserController::class, 'index']);
+        Route::get('users/{id}',    [UserController::class, 'show']);
+    });
 
     Route::middleware('role:admin')->group(function () {
         Route::post('users',        [UserController::class, 'store']);
@@ -163,10 +182,10 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | Audit Logs — admin, auditor, compliance
+    | Audit Logs — admin, auditor, compliance, and branch manager
     |----------------------------------------------------------------------
     */
-    Route::middleware('role:admin,auditor,compliance')->group(function () {
+    Route::middleware('role:admin,auditor,compliance,manager')->group(function () {
         Route::get('audit-logs',      [AuditLogController::class, 'index']);
         Route::get('audit-logs/{id}', [AuditLogController::class, 'show']);
     });
