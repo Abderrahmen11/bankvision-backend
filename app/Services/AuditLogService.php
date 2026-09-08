@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class AuditLogService
 {
@@ -36,8 +37,11 @@ class AuditLogService
                 $q->whereIn('table_name', ['customers', 'accounts', 'transactions', 'loans', 'alerts'])
                   ->orWhereIn('action', ['approve', 'reject', 'flag', 'freeze', 'update', 'delete']);
             });
+        } elseif ($user && $user->role === 'manager' && $user->branch_id) {
+            // Branch manager only sees audit logs for staff in their branch
+            $query->whereHas('user', fn ($q) => $q->where('branch_id', $user->branch_id));
         }
-        // Auditors: full bank-wide read access — no additional restrictions applied
+        // Auditors & Admin: full bank-wide read access — no additional restrictions applied
 
         $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
         $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
@@ -55,8 +59,26 @@ class AuditLogService
     /**
      * Find single audit log with user details.
      */
-    public function getLogDetails(string|int $id): AuditLog
+    public function getLogDetails(string|int $id, ?User $user = null): AuditLog
     {
-        return AuditLog::with('user')->findOrFail($id);
+        $user = $user ?? auth()->user();
+        $log = AuditLog::with('user')->findOrFail($id);
+
+        if ($user && $user->role === 'manager' && $user->branch_id) {
+            if (! $log->user || (int) $log->user->branch_id !== (int) $user->branch_id) {
+                throw new AccessDeniedHttpException('Access forbidden. Audit log does not belong to your assigned branch.');
+            }
+        }
+
+        if ($user && $user->role === 'compliance') {
+            $isComplianceRelevant = in_array($log->table_name, ['customers', 'accounts', 'transactions', 'loans', 'alerts'], true)
+                || in_array($log->action, ['approve', 'reject', 'flag', 'freeze', 'update', 'delete'], true);
+
+            if (! $isComplianceRelevant) {
+                throw new AccessDeniedHttpException('Access forbidden. Compliance officers may only view compliance-relevant audit logs.');
+            }
+        }
+
+        return $log;
     }
 }
