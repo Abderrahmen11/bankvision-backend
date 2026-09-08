@@ -254,9 +254,9 @@ class LoanTest extends TestCase
 
     // ─── Store ───────────────────────────────────────────────────────────────────
 
-    public function test_csr_can_submit_loan_application(): void
+    public function test_manager_can_submit_loan_application(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
 
         $response = $this->postJson('/api/loans', [
             'customer_id'      => $this->customer->id,
@@ -275,9 +275,25 @@ class LoanTest extends TestCase
         $this->assertDatabaseHas('loans', ['customer_id' => $this->customer->id, 'status' => 'pending']);
     }
 
-    public function test_loan_creation_rejects_missing_required_fields(): void
+    public function test_csr_cannot_submit_loan_application(): void
     {
         Sanctum::actingAs($this->csr);
+
+        $response = $this->postJson('/api/loans', [
+            'customer_id'      => $this->customer->id,
+            'loan_type'        => 'personal',
+            'principal_amount' => 10000,
+            'interest_rate'    => 5.5,
+            'term_months'      => 24,
+            'start_date'       => now()->toDateString(),
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_loan_creation_rejects_missing_required_fields(): void
+    {
+        Sanctum::actingAs($this->manager);
 
         $this->postJson('/api/loans', [])->assertStatus(422)
             ->assertJsonValidationErrors(['customer_id', 'loan_type', 'principal_amount', 'interest_rate', 'term_months', 'start_date']);
@@ -285,7 +301,7 @@ class LoanTest extends TestCase
 
     public function test_loan_creation_rejects_invalid_type(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
 
         $this->postJson('/api/loans', [
             'customer_id'      => $this->customer->id,
@@ -329,9 +345,17 @@ class LoanTest extends TestCase
 
     // ─── Update / Status Lifecycle ────────────────────────────────────────────────
 
-    public function test_loan_valid_status_transitions(): void
+    public function test_csr_cannot_update_loan(): void
     {
         Sanctum::actingAs($this->csr);
+        $loan = Loan::factory()->create(['customer_id' => $this->customer->id, 'status' => 'pending']);
+
+        $this->putJson("/api/loans/{$loan->id}", ['status' => 'active'])->assertStatus(403);
+    }
+
+    public function test_loan_valid_status_transitions(): void
+    {
+        Sanctum::actingAs($this->manager);
 
         // pending → active
         $loan = Loan::factory()->create(['customer_id' => $this->customer->id, 'status' => 'pending']);
@@ -352,7 +376,7 @@ class LoanTest extends TestCase
 
     public function test_loan_invalid_status_transitions_are_rejected(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
 
         // Cannot go from pending → defaulted directly
         $loan = Loan::factory()->create(['customer_id' => $this->customer->id, 'status' => 'pending']);
@@ -368,7 +392,7 @@ class LoanTest extends TestCase
 
     public function test_completed_loan_cannot_be_modified(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
         $loan = Loan::factory()->create(['customer_id' => $this->customer->id, 'status' => 'completed']);
 
         $this->putJson("/api/loans/{$loan->id}", ['status' => 'active'])
@@ -378,7 +402,7 @@ class LoanTest extends TestCase
 
     public function test_loan_auto_completes_when_outstanding_balance_reaches_zero(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
         $loan = Loan::factory()->create([
             'customer_id'         => $this->customer->id,
             'status'              => 'active',
@@ -397,7 +421,7 @@ class LoanTest extends TestCase
 
     public function test_delinquent_loan_generates_compliance_alert(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
         $loan = Loan::factory()->create([
             'customer_id' => $this->customer->id,
             'status'      => 'active',
@@ -415,7 +439,7 @@ class LoanTest extends TestCase
 
     public function test_defaulted_loan_generates_high_severity_alert(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
         $loan = Loan::factory()->create([
             'customer_id' => $this->customer->id,
             'status'      => 'delinquent',
