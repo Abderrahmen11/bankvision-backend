@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class UserService
 {
@@ -52,9 +53,18 @@ class UserService
     /**
      * Find single user with branch details.
      */
-    public function getUserDetails(string|int $id): User
+    public function getUserDetails(string|int $id, ?User $user = null): User
     {
-        return User::with('branch')->findOrFail($id);
+        $user = $user ?? auth()->user();
+        $targetUser = User::with('branch')->findOrFail($id);
+
+        if ($user && $user->role === 'manager' && $user->branch_id) {
+            if ((int) $targetUser->branch_id !== (int) $user->branch_id) {
+                throw new AccessDeniedHttpException('Access forbidden. User does not belong to your assigned branch.');
+            }
+        }
+
+        return $targetUser;
     }
 
     /**
