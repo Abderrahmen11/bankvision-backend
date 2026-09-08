@@ -33,9 +33,9 @@ class TransactionController extends Controller
     /**
      * Show a single transaction.
      */
-    public function show(string $id): TransactionResource
+    public function show(Request $request, string $id): TransactionResource
     {
-        $transaction = $this->transactionService->getTransactionDetails($id);
+        $transaction = $this->transactionService->getTransactionDetails($id, $request->user());
 
         return TransactionResource::make($transaction);
     }
@@ -45,7 +45,7 @@ class TransactionController extends Controller
      */
     public function store(StoreTransactionRequest $request): JsonResponse
     {
-        $transaction = $this->transactionService->recordTransaction($request->validated());
+        $transaction = $this->transactionService->recordTransaction($request->validated(), $request->user());
 
         return response()->json([
             'success' => true,
@@ -71,9 +71,9 @@ class TransactionController extends Controller
     /**
      * Flag a transaction as suspicious.
      */
-    public function flag(string $id): JsonResponse
+    public function flag(Request $request, string $id): JsonResponse
     {
-        $flagged = $this->transactionService->flagTransaction($id);
+        $flagged = $this->transactionService->flagTransaction($id, $request->user());
 
         return response()->json([
             'success' => true,
