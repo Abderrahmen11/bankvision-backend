@@ -364,6 +364,11 @@ class DashboardService
     public function getReports(?User $user = null): array
     {
         $user = $user ?? auth()->user();
+
+        if ($user && $user->role === 'csr') {
+            throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException('Access forbidden. CSR cannot view performance reports.');
+        }
+
         $isManager = $user && $user->role === 'manager' && $user->branch_id;
         $branchId = $isManager ? $user->branch_id : null;
 
