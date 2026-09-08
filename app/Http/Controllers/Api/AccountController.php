@@ -35,9 +35,9 @@ class AccountController extends Controller
     /**
      * Show a single account.
      */
-    public function show(string $id): AccountResource
+    public function show(Request $request, string $id): AccountResource
     {
-        $account = $this->accountService->getAccountDetails($id);
+        $account = $this->accountService->getAccountDetails($id, $request->user());
 
         return AccountResource::make($account);
     }
@@ -47,7 +47,7 @@ class AccountController extends Controller
      */
     public function store(StoreAccountRequest $request): JsonResponse
     {
-        $account = $this->accountService->openAccount($request->validated());
+        $account = $this->accountService->openAccount($request->validated(), $request->user());
 
         return response()->json([
             'success' => true,
@@ -61,7 +61,7 @@ class AccountController extends Controller
      */
     public function update(UpdateAccountRequest $request, string $id): JsonResponse
     {
-        $updated = $this->accountService->updateAccount($id, $request->validated());
+        $updated = $this->accountService->updateAccount($id, $request->validated(), $request->user());
 
         return response()->json([
             'success' => true,
@@ -73,9 +73,9 @@ class AccountController extends Controller
     /**
      * Close an account.
      */
-    public function destroy(string $id): JsonResponse
+    public function destroy(Request $request, string $id): JsonResponse
     {
-        $this->accountService->closeAccount($id);
+        $this->accountService->closeAccount($id, $request->user());
 
         return response()->json([
             'success' => true,
@@ -90,7 +90,9 @@ class AccountController extends Controller
     {
         $transactions = $this->accountService->getAccountTransactions(
             $id,
-            $request->only(['type', 'status', 'date_from', 'date_to'])
+            $request->only(['type', 'status', 'date_from', 'date_to']),
+            15,
+            $request->user()
         );
 
         return TransactionResource::collection($transactions);
