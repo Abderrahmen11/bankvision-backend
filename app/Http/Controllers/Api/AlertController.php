@@ -33,9 +33,9 @@ class AlertController extends Controller
     /**
      * Show a single alert.
      */
-    public function show(string $id): AlertResource
+    public function show(Request $request, string $id): AlertResource
     {
-        $alert = $this->alertService->getAlertDetails($id);
+        $alert = $this->alertService->getAlertDetails($id, $request->user());
 
         return AlertResource::make($alert);
     }
@@ -43,9 +43,9 @@ class AlertController extends Controller
     /**
      * Resolve an open alert.
      */
-    public function resolve(string $id): JsonResponse
+    public function resolve(Request $request, string $id): JsonResponse
     {
-        $resolved = $this->alertService->resolveAlert($id);
+        $resolved = $this->alertService->resolveAlert($id, $request->user());
 
         return response()->json([
             'success' => true,
@@ -59,7 +59,7 @@ class AlertController extends Controller
      */
     public function assign(AssignAlertRequest $request, string $id): JsonResponse
     {
-        $assigned = $this->alertService->assignAlert($id, (int) $request->validated('user_id'));
+        $assigned = $this->alertService->assignAlert($id, (int) $request->validated('user_id'), $request->user());
 
         return response()->json([
             'success' => true,
