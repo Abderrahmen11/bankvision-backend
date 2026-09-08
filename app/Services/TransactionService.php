@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class TransactionService
 {
@@ -64,9 +65,29 @@ class TransactionService
     /**
      * Find single transaction with account and approver relations.
      */
-    public function getTransactionDetails(string|int $id): Transaction
+    public function getTransactionDetails(string|int $id, ?User $user = null): Transaction
     {
-        return Transaction::with(['account.customer', 'approver'])->findOrFail($id);
+        $user = $user ?? auth()->user();
+        $transaction = Transaction::with(['account.customer', 'approver'])->findOrFail($id);
+
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            if ((int) $transaction->account?->customer?->branch_id !== (int) $user->branch_id) {
+                throw new AccessDeniedHttpException('Access forbidden. Transaction does not belong to your assigned branch.');
+            }
+        }
+
+        if ($user && $user->role === 'compliance') {
+            $isComplianceRelevant = $transaction->status === 'flagged'
+                || (float) $transaction->amount >= 10000
+                || $transaction->transaction_type === 'wire'
+                || $transaction->alerts()->exists();
+
+            if (! $isComplianceRelevant) {
+                throw new AccessDeniedHttpException('Access forbidden. Compliance officers may only view flagged, high-value, or wire transactions.');
+            }
+        }
+
+        return $transaction;
     }
 
     /**
@@ -74,8 +95,23 @@ class TransactionService
      * Status defaults to 'completed' unless explicitly provided.
      * Channel defaults to 'branch' if not supplied to satisfy NOT NULL constraint.
      */
-    public function recordTransaction(array $data): Transaction
+    public function recordTransaction(array $data, ?User $user = null): Transaction
     {
+        $user = $user ?? auth()->user();
+
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            $account = Account::with('customer')->findOrFail($data['account_id']);
+            if ((int) $account->customer?->branch_id !== (int) $user->branch_id) {
+                throw new AccessDeniedHttpException('Access forbidden. Cannot record transaction for account outside your assigned branch.');
+            }
+        }
+
+        if ($user && $user->role === 'csr') {
+            if (! in_array($data['transaction_type'] ?? '', ['deposit', 'withdrawal'], true)) {
+                throw new AccessDeniedHttpException('CSR can only process basic deposits and withdrawals.');
+            }
+        }
+
         return DB::transaction(function () use ($data) {
             $data['transaction_number'] = 'TXN-' . date('Y') . '-' . rand(100000, 999999);
             $data['transaction_date']   = now();
@@ -98,10 +134,20 @@ class TransactionService
      */
     public function approveTransaction(Transaction|string|int $transaction, User $approver): Transaction
     {
+        if ($approver->role === 'compliance') {
+            throw new AccessDeniedHttpException('Access forbidden. Compliance officers cannot approve transactions.');
+        }
+
         return DB::transaction(function () use ($transaction, $approver) {
             $transaction = $transaction instanceof Transaction
                 ? $transaction
-                : Transaction::whereIn('status', ['flagged', 'pending'])->findOrFail($transaction);
+                : Transaction::with('account.customer')->whereIn('status', ['flagged', 'pending'])->findOrFail($transaction);
+
+            if ($approver->role === 'manager' && $approver->branch_id) {
+                if ((int) $transaction->account?->customer?->branch_id !== (int) $approver->branch_id) {
+                    throw new AccessDeniedHttpException('Access forbidden. Cannot approve transaction outside your assigned branch.');
+                }
+            }
 
             // If approving a pending transaction, now apply the balance change
             if ($transaction->status === 'pending') {
@@ -126,12 +172,20 @@ class TransactionService
      * Flag a transaction as suspicious for compliance review.
      * Auto-creates a compliance alert (idempotent — skips if one already exists).
      */
-    public function flagTransaction(Transaction|string|int $transaction): Transaction
+    public function flagTransaction(Transaction|string|int $transaction, ?User $user = null): Transaction
     {
-        return DB::transaction(function () use ($transaction) {
+        $user = $user ?? auth()->user();
+
+        return DB::transaction(function () use ($transaction, $user) {
             $transaction = $transaction instanceof Transaction
                 ? $transaction
-                : Transaction::where('status', 'completed')->findOrFail($transaction);
+                : Transaction::with('account.customer')->where('status', 'completed')->findOrFail($transaction);
+
+            if ($user && $user->role === 'manager' && $user->branch_id) {
+                if ((int) $transaction->account?->customer?->branch_id !== (int) $user->branch_id) {
+                    throw new AccessDeniedHttpException('Access forbidden. Cannot flag transaction outside your assigned branch.');
+                }
+            }
 
             $transaction->update(['status' => 'flagged']);
 
