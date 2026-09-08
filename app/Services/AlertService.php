@@ -9,6 +9,7 @@ use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class AlertService
 {
@@ -33,16 +34,26 @@ class AlertService
             ->filter($filters);
 
         // Role-based restrictions hook
-        if ($user && $user->role === 'compliance') {
-            // Compliance officers see compliance-related alerts:
-            // suspicious transactions, KYC expirations, delinquent loans, high/medium severity, or alerts assigned to them
-            $query->where(function ($q) use ($user) {
-                $q->whereIn('alert_type', ['suspicious_transaction', 'kyc_expiring', 'loan_delinquent'])
-                  ->orWhereIn('severity', ['high', 'medium'])
-                  ->orWhere('assigned_to', $user->id);
+        if ($user && $user->role === 'analyst') {
+            // Risk analyst: only risk-related alerts
+            $query->where(function ($q) {
+                $q->whereIn('alert_type', ['suspicious_transaction', 'loan_delinquent', 'defaulted_loan'])
+                  ->orWhere('severity', 'high');
             });
-        } elseif ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
-            // Manager & CSR only see alerts originating from or assigned to their branch
+        } elseif ($user && $user->role === 'csr' && $user->branch_id) {
+            // CSR: only customer-related alerts in their branch
+            $branchId = $user->branch_id;
+            $query->where(function ($q) use ($branchId) {
+                $q->where(function ($cq) use ($branchId) {
+                    $cq->where('alertable_type', Customer::class)
+                       ->whereHasMorph('alertable', [Customer::class], fn ($c) => $c->where('branch_id', $branchId));
+                })->orWhere(function ($kq) use ($branchId) {
+                    $kq->where('alert_type', 'kyc_expiring')
+                       ->whereHasMorph('alertable', [Customer::class], fn ($c) => $c->where('branch_id', $branchId));
+                });
+            });
+        } elseif ($user && in_array($user->role, ['manager'], true) && $user->branch_id) {
+            // Manager only see alerts originating from or assigned to their branch
             $branchId = $user->branch_id;
             $query->where(function ($q) use ($branchId, $user) {
                 $q->where('assigned_to', $user->id)
@@ -65,6 +76,7 @@ class AlertService
                   });
             });
         }
+        // Compliance, Admin, Auditor: full access to alerts
 
         $sortColumn    = self::SORT_MAP[$filters['sort_by'] ?? ''] ?? null;
         $sortDirection = strtolower($filters['sort_direction'] ?? 'desc');
@@ -82,19 +94,49 @@ class AlertService
     /**
      * Find single alert with assignee and triggering entity.
      */
-    public function getAlertDetails(string|int $id): Alert
+    public function getAlertDetails(string|int $id, ?User $user = null): Alert
     {
-        return Alert::with(['assignedTo', 'alertable'])->findOrFail($id);
+        $user = $user ?? auth()->user();
+        $alert = Alert::with(['assignedTo', 'alertable'])->findOrFail($id);
+
+        if ($user && $user->role === 'manager' && $user->branch_id) {
+            if (! $this->alertBelongsToBranch($alert, (int) $user->branch_id)) {
+                throw new AccessDeniedHttpException('Access forbidden. Alert does not belong to your assigned branch.');
+            }
+        }
+
+        if ($user && $user->role === 'csr' && $user->branch_id) {
+            $isCustomerRelated = $alert->alertable_type === Customer::class || $alert->alert_type === 'kyc_expiring';
+            if (! $isCustomerRelated || ! $this->alertBelongsToBranch($alert, (int) $user->branch_id)) {
+                throw new AccessDeniedHttpException('Access forbidden. CSR can only view customer-related alerts for their assigned branch.');
+            }
+        }
+
+        if ($user && $user->role === 'analyst') {
+            $isRiskRelated = in_array($alert->alert_type, ['suspicious_transaction', 'loan_delinquent', 'defaulted_loan'], true) || $alert->severity === 'high';
+            if (! $isRiskRelated) {
+                throw new AccessDeniedHttpException('Access forbidden. Risk Analysts can only view risk-related alerts.');
+            }
+        }
+
+        return $alert;
     }
 
     /**
      * Resolve an open or in-progress alert.
      */
-    public function resolveAlert(Alert|string|int $alert): Alert
+    public function resolveAlert(Alert|string|int $alert, ?User $user = null): Alert
     {
+        $user = $user ?? auth()->user();
         $alert = $alert instanceof Alert
             ? $alert
-            : Alert::whereIn('status', ['open', 'in-progress'])->findOrFail($alert);
+            : Alert::with(['assignedTo', 'alertable'])->whereIn('status', ['open', 'in-progress'])->findOrFail($alert);
+
+        if ($user && $user->role === 'manager' && $user->branch_id) {
+            if (! $this->alertBelongsToBranch($alert, (int) $user->branch_id)) {
+                throw new AccessDeniedHttpException('Access forbidden. Cannot resolve alert outside your assigned branch.');
+            }
+        }
 
         $alert->update([
             'status'      => 'resolved',
@@ -107,9 +149,16 @@ class AlertService
     /**
      * Assign an alert to a staff member and mark it as in-progress.
      */
-    public function assignAlert(Alert|string|int $alert, int $userId): Alert
+    public function assignAlert(Alert|string|int $alert, int $userId, ?User $user = null): Alert
     {
-        $alert = $alert instanceof Alert ? $alert : Alert::findOrFail($alert);
+        $user = $user ?? auth()->user();
+        $alert = $alert instanceof Alert ? $alert : Alert::with(['assignedTo', 'alertable'])->findOrFail($alert);
+
+        if ($user && $user->role === 'manager' && $user->branch_id) {
+            if (! $this->alertBelongsToBranch($alert, (int) $user->branch_id)) {
+                throw new AccessDeniedHttpException('Access forbidden. Cannot assign alert outside your assigned branch.');
+            }
+        }
 
         $alert->update([
             'assigned_to' => $userId,
@@ -117,5 +166,31 @@ class AlertService
         ]);
 
         return $alert->fresh(['assignedTo', 'alertable']);
+    }
+
+    /**
+     * Check if alert is associated with a given branch.
+     */
+    private function alertBelongsToBranch(Alert $alert, int $branchId): bool
+    {
+        if ($alert->assignedTo && (int) $alert->assignedTo->branch_id === $branchId) {
+            return true;
+        }
+
+        $alertable = $alert->alertable;
+        if ($alertable instanceof Customer) {
+            return (int) $alertable->branch_id === $branchId;
+        }
+        if ($alertable instanceof Account) {
+            return (int) $alertable->customer?->branch_id === $branchId;
+        }
+        if ($alertable instanceof Transaction) {
+            return (int) $alertable->account?->customer?->branch_id === $branchId;
+        }
+        if ($alertable instanceof Loan) {
+            return (int) $alertable->customer?->branch_id === $branchId;
+        }
+
+        return false;
     }
 }
