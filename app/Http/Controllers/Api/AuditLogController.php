@@ -30,9 +30,9 @@ class AuditLogController extends Controller
     /**
      * Show a single audit log.
      */
-    public function show(string $id): AuditLogResource
+    public function show(\Illuminate\Http\Request $request, string $id): AuditLogResource
     {
-        $log = $this->auditLogService->getLogDetails($id);
+        $log = $this->auditLogService->getLogDetails($id, $request->user());
 
         return AuditLogResource::make($log);
     }

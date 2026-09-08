@@ -35,9 +35,9 @@ class BranchController extends Controller
     /**
      * Show a single branch with manager.
      */
-    public function show(string $id): BranchResource
+    public function show(Request $request, string $id): BranchResource
     {
-        $branch = $this->branchService->getBranchDetails($id);
+        $branch = $this->branchService->getBranchDetails($id, $request->user());
 
         return BranchResource::make($branch);
     }

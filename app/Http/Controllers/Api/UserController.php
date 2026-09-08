@@ -34,9 +34,9 @@ class UserController extends Controller
     /**
      * Show a single user with branch.
      */
-    public function show(string $id): UserResource
+    public function show(Request $request, string $id): UserResource
     {
-        $user = $this->userService->getUserDetails($id);
+        $user = $this->userService->getUserDetails($id, $request->user());
 
         return UserResource::make($user);
     }
