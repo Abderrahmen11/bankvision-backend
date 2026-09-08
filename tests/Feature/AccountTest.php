@@ -299,9 +299,9 @@ class AccountTest extends TestCase
 
     // ─── Update ──────────────────────────────────────────────────────────────────
 
-    public function test_csr_can_freeze_an_account(): void
+    public function test_manager_can_freeze_an_account(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
         $account = Account::factory()->create(['customer_id' => $this->customer->id, 'status' => 'active']);
 
         $response = $this->putJson("/api/accounts/{$account->id}", [
@@ -313,9 +313,21 @@ class AccountTest extends TestCase
             ->assertJsonPath('data.status', 'frozen');
     }
 
-    public function test_account_update_rejects_invalid_status(): void
+    public function test_csr_cannot_freeze_or_update_account(): void
     {
         Sanctum::actingAs($this->csr);
+        $account = Account::factory()->create(['customer_id' => $this->customer->id, 'status' => 'active']);
+
+        $response = $this->putJson("/api/accounts/{$account->id}", [
+            'status' => 'frozen',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_account_update_rejects_invalid_status(): void
+    {
+        Sanctum::actingAs($this->manager);
         $account = Account::factory()->create(['customer_id' => $this->customer->id]);
 
         $this->putJson("/api/accounts/{$account->id}", [
@@ -325,9 +337,9 @@ class AccountTest extends TestCase
 
     // ─── Destroy ─────────────────────────────────────────────────────────────────
 
-    public function test_csr_can_close_account(): void
+    public function test_manager_can_close_account(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
         $account = Account::factory()->create(['customer_id' => $this->customer->id, 'status' => 'active']);
 
         $response = $this->deleteJson("/api/accounts/{$account->id}");
@@ -337,6 +349,16 @@ class AccountTest extends TestCase
 
         // Soft-close: status is set to 'closed', record still exists
         $this->assertDatabaseHas('accounts', ['id' => $account->id, 'status' => 'closed']);
+    }
+
+    public function test_csr_cannot_close_account(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $account = Account::factory()->create(['customer_id' => $this->customer->id, 'status' => 'active']);
+
+        $response = $this->deleteJson("/api/accounts/{$account->id}");
+
+        $response->assertStatus(403);
     }
 
     // ─── Transactions sub-resource ───────────────────────────────────────────────
