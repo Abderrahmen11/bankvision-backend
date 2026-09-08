@@ -34,9 +34,9 @@ class LoanController extends Controller
     /**
      * Show a single loan with details.
      */
-    public function show(string $id): LoanResource
+    public function show(Request $request, string $id): LoanResource
     {
-        $loan = $this->loanService->getLoanDetails($id);
+        $loan = $this->loanService->getLoanDetails($id, $request->user());
 
         return LoanResource::make($loan);
     }
@@ -46,7 +46,7 @@ class LoanController extends Controller
      */
     public function store(StoreLoanRequest $request): JsonResponse
     {
-        $loan = $this->loanService->applyForLoan($request->validated());
+        $loan = $this->loanService->applyForLoan($request->validated(), $request->user());
 
         return response()->json([
             'success' => true,
@@ -60,7 +60,7 @@ class LoanController extends Controller
      */
     public function update(UpdateLoanRequest $request, string $id): JsonResponse
     {
-        $updated = $this->loanService->updateLoan($id, $request->validated());
+        $updated = $this->loanService->updateLoan($id, $request->validated(), $request->user());
 
         return response()->json([
             'success' => true,
@@ -72,9 +72,9 @@ class LoanController extends Controller
     /**
      * Approve a pending loan application.
      */
-    public function approve(string $id): JsonResponse
+    public function approve(Request $request, string $id): JsonResponse
     {
-        $approved = $this->loanService->approveLoan($id);
+        $approved = $this->loanService->approveLoan($id, $request->user());
 
         return response()->json([
             'success' => true,
