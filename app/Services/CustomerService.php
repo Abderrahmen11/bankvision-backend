@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class CustomerService
 {
@@ -24,19 +25,11 @@ class CustomerService
             ->filter($filters);
 
         // Role-based restrictions hook
-        if ($user && $user->role === 'compliance') {
-            // Compliance officers see customers relevant to KYC/compliance:
-            // non-verified KYC, medium/high risk level, or customers with alerts
-            $query->where(function ($q) {
-                $q->whereIn('kyc_status', ['pending', 'expired', 'rejected'])
-                  ->orWhereIn('risk_level', ['medium', 'high'])
-                  ->orWhereHas('alerts');
-            });
-        } elseif ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
             // Manager & CSR only see customers belonging to their assigned branch
             $query->where('branch_id', $user->branch_id);
         }
-        // Admin, Analyst, Auditor: full bank-wide read access — no additional restriction applied
+        // Admin, Compliance, Analyst, Auditor: full bank-wide read access
 
         // Sorting by registration_date or specified column with direction
         $sortBy = $filters['sort_by'] ?? ($filters['sort_direction'] ?? $filters['direction'] ?? $filters['order'] ?? null ? 'registration_date' : null);
@@ -55,18 +48,33 @@ class CustomerService
     /**
      * Find customer with accounts and loans counts and relations.
      */
-    public function getCustomerDetails(string|int $id): Customer
+    public function getCustomerDetails(string|int $id, ?User $user = null): Customer
     {
-        return Customer::with(['branch', 'relationshipManager'])
+        $user = $user ?? auth()->user();
+        $customer = Customer::with(['branch', 'relationshipManager'])
             ->withCount(['accounts', 'loans'])
             ->findOrFail($id);
+
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            if ((int) $customer->branch_id !== (int) $user->branch_id) {
+                throw new AccessDeniedHttpException('Access forbidden. Customer does not belong to your assigned branch.');
+            }
+        }
+
+        return $customer;
     }
 
     /**
      * Create a new customer and generate a unique customer number.
      */
-    public function createCustomer(array $data): Customer
+    public function createCustomer(array $data, ?User $user = null): Customer
     {
+        $user = $user ?? auth()->user();
+
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            $data['branch_id'] = $user->branch_id;
+        }
+
         $data['customer_number']   = 'CUST-' . date('Y') . '-' . rand(10000, 99999);
         $data['registration_date'] = $data['registration_date'] ?? now()->toDateString();
         $data['kyc_status']        = $data['kyc_status'] ?? 'pending';
@@ -79,9 +87,37 @@ class CustomerService
     /**
      * Update an existing customer.
      */
-    public function updateCustomer(Customer|string|int $customer, array $data): Customer
+    public function updateCustomer(Customer|string|int $customer, array $data, ?User $user = null): Customer
     {
+        $user = $user ?? auth()->user();
         $customer = $customer instanceof Customer ? $customer : Customer::findOrFail($customer);
+
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            if ((int) $customer->branch_id !== (int) $user->branch_id) {
+                throw new AccessDeniedHttpException('Access forbidden. Customer does not belong to your assigned branch.');
+            }
+        }
+
+        if ($user && $user->role === 'csr') {
+            // CSR cannot verify KYC or update risk level
+            if (array_key_exists('kyc_status', $data) || array_key_exists('risk_level', $data)) {
+                throw new AccessDeniedHttpException('CSR cannot update KYC status or risk level.');
+            }
+            if (isset($data['branch_id']) && (int) $data['branch_id'] !== (int) $user->branch_id) {
+                throw new AccessDeniedHttpException('Access forbidden. Cannot change customer branch.');
+            }
+        }
+
+        if ($user && $user->role === 'compliance') {
+            // Compliance cannot edit customer personal info
+            $personalFields = ['full_name', 'email', 'phone', 'address', 'city', 'relationship_manager_id'];
+            foreach ($personalFields as $field) {
+                if (array_key_exists($field, $data)) {
+                    throw new AccessDeniedHttpException('Compliance officers cannot edit customer personal information.');
+                }
+            }
+        }
+
         $customer->update($data);
 
         return $customer->fresh(['branch', 'relationshipManager']);
@@ -117,9 +153,16 @@ class CustomerService
     /**
      * Get paginated accounts for a customer.
      */
-    public function getCustomerAccounts(Customer|string|int $customer, int $perPage = 15): LengthAwarePaginator
+    public function getCustomerAccounts(Customer|string|int $customer, int $perPage = 15, ?User $user = null): LengthAwarePaginator
     {
+        $user = $user ?? auth()->user();
         $customer = $customer instanceof Customer ? $customer : Customer::findOrFail($customer);
+
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            if ((int) $customer->branch_id !== (int) $user->branch_id) {
+                throw new AccessDeniedHttpException('Access forbidden. Customer does not belong to your assigned branch.');
+            }
+        }
 
         return $customer->accounts()
             ->latest()
@@ -129,9 +172,16 @@ class CustomerService
     /**
      * Get paginated loans for a customer.
      */
-    public function getCustomerLoans(Customer|string|int $customer, int $perPage = 15): LengthAwarePaginator
+    public function getCustomerLoans(Customer|string|int $customer, int $perPage = 15, ?User $user = null): LengthAwarePaginator
     {
+        $user = $user ?? auth()->user();
         $customer = $customer instanceof Customer ? $customer : Customer::findOrFail($customer);
+
+        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+            if ((int) $customer->branch_id !== (int) $user->branch_id) {
+                throw new AccessDeniedHttpException('Access forbidden. Customer does not belong to your assigned branch.');
+            }
+        }
 
         return $customer->loans()
             ->latest()
