@@ -54,24 +54,25 @@ class CustomerTest extends TestCase
         $this->assertCount(5, $response->json('data'));
     }
 
-    public function test_compliance_officer_only_sees_kyc_and_compliance_relevant_customers(): void
+    public function test_compliance_officer_can_view_all_customers(): void
     {
         Sanctum::actingAs($this->compliance);
 
-        // Compliance-relevant customers
+        $otherBranch = Branch::factory()->create(['status' => 'active']);
+
+        // Customers in primary branch and other branch
         $c1 = Customer::factory()->create(['branch_id' => $this->branch->id, 'kyc_status' => 'pending', 'risk_level' => 'low']);
         $c2 = Customer::factory()->create(['branch_id' => $this->branch->id, 'kyc_status' => 'verified', 'risk_level' => 'high']);
-
-        // Non-compliance regular customer
-        Customer::factory()->create(['branch_id' => $this->branch->id, 'kyc_status' => 'verified', 'risk_level' => 'low']);
+        $c3 = Customer::factory()->create(['branch_id' => $otherBranch->id, 'kyc_status' => 'verified', 'risk_level' => 'low']);
 
         $response = $this->getJson('/api/customers');
 
         $response->assertStatus(200);
-        $this->assertCount(2, $response->json('data'));
+        $this->assertCount(3, $response->json('data'));
         $ids = collect($response->json('data'))->pluck('id')->all();
         $this->assertContains($c1->id, $ids);
         $this->assertContains($c2->id, $ids);
+        $this->assertContains($c3->id, $ids);
     }
 
     public function test_manager_only_sees_customers_in_assigned_branch(): void
@@ -301,9 +302,36 @@ class CustomerTest extends TestCase
 
     // ─── Update ──────────────────────────────────────────────────────────────────
 
-    public function test_csr_can_update_customer_details(): void
+    public function test_csr_can_update_customer_contact_details(): void
     {
         Sanctum::actingAs($this->csr);
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+
+        $response = $this->putJson("/api/customers/{$customer->id}", [
+            'phone'   => '555-9999',
+            'address' => '456 New St',
+            'city'    => 'New City',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['success' => true, 'message' => 'Customer updated successfully.'])
+            ->assertJsonPath('data.phone', '555-9999')
+            ->assertJsonPath('data.city', 'New City');
+    }
+
+    public function test_csr_cannot_update_kyc_or_risk_level(): void
+    {
+        Sanctum::actingAs($this->csr);
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+
+        $this->putJson("/api/customers/{$customer->id}", [
+            'kyc_status' => 'verified',
+        ])->assertStatus(403);
+    }
+
+    public function test_manager_can_update_customer_details_and_kyc(): void
+    {
+        Sanctum::actingAs($this->manager);
         $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
 
         $response = $this->putJson("/api/customers/{$customer->id}", [
@@ -317,9 +345,27 @@ class CustomerTest extends TestCase
             ->assertJsonPath('data.kyc_status', 'verified');
     }
 
+    public function test_compliance_can_update_kyc_status_only(): void
+    {
+        Sanctum::actingAs($this->compliance);
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+
+        // Compliance updating KYC passes
+        $response = $this->putJson("/api/customers/{$customer->id}", [
+            'kyc_status' => 'verified',
+        ]);
+        $response->assertStatus(200)
+            ->assertJsonPath('data.kyc_status', 'verified');
+
+        // Compliance attempting to update personal details gets 403
+        $this->putJson("/api/customers/{$customer->id}", [
+            'full_name' => 'Illegal Change',
+        ])->assertStatus(403);
+    }
+
     public function test_customer_update_rejects_invalid_kyc_status(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
         $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
 
         $this->putJson("/api/customers/{$customer->id}", [
@@ -329,7 +375,7 @@ class CustomerTest extends TestCase
 
     public function test_customer_email_update_ignores_own_uniqueness(): void
     {
-        Sanctum::actingAs($this->csr);
+        Sanctum::actingAs($this->manager);
         $customer = Customer::factory()->create(['branch_id' => $this->branch->id, 'email' => 'same@example.com']);
 
         // Updating with the same email should pass
