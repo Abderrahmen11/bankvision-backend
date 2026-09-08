@@ -31,26 +31,39 @@ Content-Type: application/json
 ```
 
 ### Role-Based Access Control (RBAC) Matrix
+
+> [!NOTE]
+> **Branch Scoping**: Branch Manager and CSR operations are automatically scoped to their assigned `branch_id`. Accessing resources in other branches returns `403 Forbidden`.
+
 | Module | Endpoint | Admin | Manager | Compliance | Analyst | CSR | Auditor |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Auth** | Login | Public | Public | Public | Public | Public | Public |
 | **Auth** | Logout / Profile | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Customers** | List / View / Related | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Customers** | Create / Update | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **Customers** | List / View | ✅ | ✅ (branch only) | ✅ (all) | ✅ | ✅ (branch only) | ✅ |
+| **Customers** | Create | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **Customers** | Update (contact info) | ✅ | ✅ | ❌ | ❌ | ✅ (contact only) | ❌ |
+| **Customers** | Update (KYC / risk level) | ✅ | ✅ | ✅ (KYC only) | ❌ | ❌ | ❌ |
 | **Customers** | Delete | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Accounts** | List / View / Tx History | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Accounts** | Open / Update / Close | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| **Transactions** | List / View | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Transactions** | Create (Record) | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| **Transactions** | Approve / Flag | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **Loans** | List / View | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Loans** | Submit Application / Update | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **Accounts** | List / View | ✅ | ✅ (branch only) | ✅ (flagged/high-risk) | ✅ | ✅ (branch only) | ✅ |
+| **Accounts** | Open | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **Accounts** | Update / Close (Delete) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Transactions** | List / View | ✅ | ✅ (branch only) | ✅ (flagged/high-value/wire) | ✅ | ✅ (branch, deposit/withdrawal) | ✅ |
+| **Transactions** | Create (Record) | ✅ | ✅ | ❌ | ❌ | ✅ (deposit/withdrawal only) | ❌ |
+| **Transactions** | Approve | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Transactions** | Flag | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Loans** | List / View | ✅ | ✅ (branch only) | ✅ (delinquent/defaulted) | ✅ | ✅ (branch only, read-only) | ✅ |
+| **Loans** | Submit Application / Update | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Loans** | Approve Loan | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Alerts** | List / View | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Alerts** | List / View | ✅ | ✅ (branch only) | ✅ (all) | ✅ (risk-related) | ✅ (customer-related, branch) | ✅ |
 | **Alerts** | Assign / Resolve | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **Branches** | List / View | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Branches** | List | ✅ | ✅ (own branch only) | ✅ | ✅ | ✅ (own branch only) | ✅ |
+| **Branches** | View (single) | ✅ | ✅ (own branch only) | ✅ | ✅ | ✅ (own branch only) | ✅ |
 | **Branches** | Create / Update / Delete | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Users / Staff** | List / View | ✅ | ✅ (branch staff only) | ✅ | ✅ | ❌ | ✅ |
+| **Users / Staff** | Create / Update / Delete | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Audit Logs** | View | ✅ | ✅ (branch staff logs) | ✅ (compliance-relevant) | ❌ | ❌ | ✅ |
 | **Dashboard** | Stats / Chart / Recent | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Dashboard** | Branch Performance Reports | ✅ | ✅ (own branch) | ✅ | ✅ | ❌ | ✅ |
 
 ---
 
@@ -121,8 +134,8 @@ Authenticate staff credentials, verify active status, and generate a Sanctum API
 **Request Example:**
 ```json
 {
-  "email": "sarah.admin@bankvision.local",
-  "password": "Password123!"
+  "email": "admin@bankvision.com",
+  "password": "password"
 }
 ```
 
@@ -135,7 +148,7 @@ Authenticate staff credentials, verify active status, and generate a Sanctum API
   "user": {
     "id": 1,
     "name": "Sarah Connor",
-    "email": "sarah.admin@bankvision.local",
+    "email": "admin@bankvision.com",
     "role": "admin",
     "status": "active",
     "phone": "+1-555-0199",
@@ -182,7 +195,7 @@ Retrieve current authenticated staff profile.
   "user": {
     "id": 1,
     "name": "Sarah Connor",
-    "email": "sarah.admin@bankvision.local",
+    "email": "admin@bankvision.com",
     "role": "admin",
     "status": "active",
     "phone": "+1-555-0199",
@@ -206,12 +219,20 @@ Retrieve current authenticated staff profile.
 List paginated customers with optional search and filtering.
 
 - **Role**: All authenticated roles
+- **Scoping**:
+  - `admin`, `auditor`, `analyst`: See all customers bank-wide.
+  - `compliance`: Sees all customers bank-wide (for KYC/risk review).
+  - `manager`, `csr`: Sees only customers in their assigned branch (`branch_id`).
 - **Query Parameters**:
   - `page` (`integer`, optional): Page number (default: 1)
-  - `search` (`string`, optional): Search by full name, email, or customer number
+  - `per_page` (`integer`, optional): Results per page (default: 15)
+  - `search` (`string`, optional): Search by full name, email, phone, or customer number
   - `type` (`string`, optional): `premium`, `regular`, `business`
   - `kyc_status` (`string`, optional): `verified`, `pending`, `expired`
   - `risk_level` (`string`, optional): `low`, `medium`, `high`
+  - `branch_id` (`integer`, optional): Filter by branch (admin/auditor/compliance only)
+  - `sort_by` (`string`, optional): Column to sort by (default: `created_at`)
+  - `sort_direction` (`string`, optional): `asc` or `desc`
 
 **Response (`200 OK`):**
 ```json
@@ -239,7 +260,7 @@ List paginated customers with optional search and filtering.
       "relationship_manager": {
         "id": 2,
         "name": "James Smith",
-        "email": "james.manager@bankvision.local"
+        "email": "manager@bankvision.com"
       }
     }
   ],
@@ -266,6 +287,7 @@ List paginated customers with optional search and filtering.
 Create a new customer profile.
 
 - **Role**: `admin`, `manager`, `csr`
+- **Scoping**: `manager` and `csr` may only create customers in their assigned branch.
 
 **Validation Rules:**
 | Field | Type | Rules | Description |
@@ -352,21 +374,29 @@ Retrieve detailed information for a single customer.
 ### `PUT /api/customers/{id}`
 Update an existing customer record.
 
-- **Role**: `admin`, `manager`, `csr`
+- **Role**: `admin`, `manager`, `csr`, `compliance`
+- **Permission rules by role**:
+  - `admin`, `manager`: Can update all fields including `kyc_status`, `risk_level`, and personal info.
+  - `csr`: Can update contact fields only (`phone`, `address`, `city`). Attempting to update `kyc_status` or `risk_level` returns `403 Forbidden`.
+  - `compliance`: Can update `kyc_status` only. Attempting to update personal details (`full_name`, `email`, `phone`, `address`, `city`) returns `403 Forbidden`.
+
+> [!CAUTION]
+> **CSR** cannot update `kyc_status` or `risk_level` — returns `403 Forbidden`.
+> **Compliance** cannot edit personal customer info — returns `403 Forbidden`.
 
 **Validation Rules:**
-| Field | Type | Rules |
-| :--- | :--- | :--- |
-| `full_name` | `string` | `sometimes`, `max:255` |
-| `email` | `string` | `sometimes`, `email`, `unique:customers,email,{id}` |
-| `phone` | `string` | `sometimes`, `max:20` |
-| `address` | `string` | `nullable` |
-| `city` | `string` | `nullable`, `max:100` |
-| `customer_type` | `string` | `sometimes`, `in:premium,regular,business` |
-| `kyc_status` | `string` | `sometimes`, `in:verified,pending,expired` |
-| `risk_level` | `string` | `sometimes`, `in:low,medium,high` |
-| `branch_id` | `integer` | `sometimes`, `exists:branches,id` |
-| `relationship_manager_id`| `integer` | `nullable`, `exists:users,id` |
+| Field | Type | Rules | Roles Allowed |
+| :--- | :--- | :--- | :--- |
+| `full_name` | `string` | `sometimes`, `max:255` | `admin`, `manager` |
+| `email` | `string` | `sometimes`, `email`, `unique:customers,email,{id}` | `admin`, `manager` |
+| `phone` | `string` | `sometimes`, `max:20` | `admin`, `manager`, `csr` |
+| `address` | `string` | `nullable` | `admin`, `manager`, `csr` |
+| `city` | `string` | `nullable`, `max:100` | `admin`, `manager`, `csr` |
+| `customer_type` | `string` | `sometimes`, `in:premium,regular,business` | `admin`, `manager` |
+| `kyc_status` | `string` | `sometimes`, `in:verified,pending,expired` | `admin`, `manager`, `compliance` |
+| `risk_level` | `string` | `sometimes`, `in:low,medium,high` | `admin`, `manager` |
+| `branch_id` | `integer` | `sometimes`, `exists:branches,id` | `admin` |
+| `relationship_manager_id`| `integer` | `nullable`, `exists:users,id` | `admin`, `manager` |
 
 **Response (`200 OK`):**
 ```json
@@ -468,6 +498,7 @@ List paginated bank accounts with optional filters.
 Open a new bank account.
 
 - **Role**: `admin`, `manager`, `csr`
+- **Scoping**: `manager` and `csr` may only open accounts for customers in their assigned branch.
 
 **Validation Rules:**
 | Field | Type | Rules | Description |
@@ -519,9 +550,12 @@ Retrieve single account details with owner information.
 ---
 
 ### `PUT /api/accounts/{id}`
-Update account status or interest rate.
+Update account status (freeze/unfreeze) or interest rate.
 
-- **Role**: `admin`, `manager`, `csr`
+- **Role**: `admin`, `manager`
+
+> [!CAUTION]
+> **CSR** cannot update or close accounts — returns `403 Forbidden`.
 
 **Validation Rules:**
 | Field | Type | Rules |
@@ -532,9 +566,12 @@ Update account status or interest rate.
 ---
 
 ### `DELETE /api/accounts/{id}`
-Close an account (sets status to `closed`).
+Close an account (sets status to `closed`). Cannot be deleted if account has a non-zero balance.
 
-- **Role**: `admin`, `manager`, `csr`
+- **Role**: `admin`, `manager`
+
+> [!CAUTION]
+> **CSR** cannot close accounts — returns `403 Forbidden`.
 
 **Response (`200 OK`):**
 ```json
@@ -575,12 +612,15 @@ List paginated transactions across the institution.
 ---
 
 ### `POST /api/transactions`
-Record a new financial transaction (deposit, withdrawal, transfer, wire).
+Record a new financial transaction.
 - For `completed` status: executes balance change atomically with row-level pessimistic locking.
 - Withdrawals exceeding available balance throw `422 Unprocessable Entity` ("Insufficient funds").
 - Transactions on `frozen` or `closed` accounts are rejected.
 
 - **Role**: `admin`, `manager`, `csr`
+- **Scoping**:
+  - `manager` and `csr`: Can only record transactions on accounts belonging to their assigned branch.
+  - `csr`: Restricted to `deposit` and `withdrawal` types only. Attempting `transfer` or `wire` returns `403 Forbidden`.
 
 **Validation Rules:**
 | Field | Type | Rules | Description |
@@ -637,7 +677,11 @@ Retrieve details for a single transaction.
 ### `POST /api/transactions/{id}/approve`
 Approve a pending or flagged transaction. Executes underlying account balance changes atomically and sets approver audit metadata.
 
-- **Role**: `admin`, `manager`, `compliance`
+- **Role**: `admin`, `manager`
+- **Scoping**: `manager` can only approve transactions for accounts in their assigned branch.
+
+> [!CAUTION]
+> **Compliance Officer** cannot approve transactions — returns `403 Forbidden`. The compliance role is restricted to flagging suspicious transactions only.
 
 **Response (`200 OK`):**
 ```json
@@ -651,7 +695,7 @@ Approve a pending or flagged transaction. Executes underlying account balance ch
     "approver": {
       "id": 3,
       "name": "David Compliance",
-      "email": "david.compliance@bankvision.local"
+      "email": "compliance@bankvision.com"
     }
   }
 }
@@ -660,7 +704,7 @@ Approve a pending or flagged transaction. Executes underlying account balance ch
 ---
 
 ### `POST /api/transactions/{id}/flag`
-Flag a transaction for compliance investigation. Automatically creates a polymorphic compliance alert.
+Flag a transaction for compliance investigation. Automatically creates a polymorphic compliance alert. If an open alert for this transaction already exists, no duplicate is created.
 
 - **Role**: `admin`, `manager`, `compliance`
 
@@ -691,7 +735,11 @@ List paginated loans with optional filters.
 ### `POST /api/loans`
 Submit a new loan application. New loans are created with `pending` status.
 
-- **Role**: `admin`, `manager`, `csr`
+- **Role**: `admin`, `manager`
+- **Scoping**: `manager` can only submit loan applications for customers in their assigned branch.
+
+> [!CAUTION]
+> **CSR** cannot submit loan applications — returns `403 Forbidden`.
 
 **Validation Rules:**
 | Field | Type | Rules | Description |
@@ -749,8 +797,13 @@ Retrieve single loan details.
 Update loan balance, payment schedule, or status.
 - Setting `outstanding_balance` to `0` automatically transitions status to `completed`.
 - Transitioning status to `delinquent` or `defaulted` generates a high-priority compliance alert.
+- Valid status transitions: `pending → active`, `active → delinquent`, `delinquent → defaulted`, `defaulted → completed`. Invalid transitions return `422`.
+- Completed loans cannot be modified.
 
-- **Role**: `admin`, `manager`, `csr`
+- **Role**: `admin`, `manager`
+
+> [!CAUTION]
+> **CSR** cannot update loans — returns `403 Forbidden`.
 
 **Validation Rules:**
 | Field | Type | Rules |
@@ -830,7 +883,7 @@ Assign an alert to a specific compliance officer / staff member. Transitions sta
     "assigned_to": {
       "id": 3,
       "name": "David Compliance",
-      "email": "david.compliance@bankvision.local"
+      "email": "compliance@bankvision.com"
     }
   }
 }
@@ -864,10 +917,17 @@ Mark an alert as resolved and record the `resolved_at` timestamp.
 List paginated physical bank branches with manager information and total employee counts.
 
 - **Role**: All authenticated roles
+- **Scoping**:
+  - `admin`, `compliance`, `analyst`, `auditor`: See all branches bank-wide.
+  - `manager`, `csr`: See **only their assigned branch** (returns a list of 1).
 - **Query Parameters**:
-  - `search` (`string`, optional): Search branch code or name
+  - `search` (`string`, optional): Search branch code, name, or phone
   - `status` (`string`, optional): `active`, `inactive`, `under_renovation`
   - `city` (`string`, optional): Filter by city
+  - `manager_id` (`integer`, optional): Filter by assigned manager
+  - `sort_by` (`string`, optional): Column to sort (default: `created_at`)
+  - `sort_direction` (`string`, optional): `asc` or `desc`
+  - `per_page` (`integer`, optional): Results per page (default: 15)
 
 ---
 
@@ -875,6 +935,7 @@ List paginated physical bank branches with manager information and total employe
 Retrieve single branch details.
 
 - **Role**: All authenticated roles
+- **Scoping**: `manager` and `csr` can only view their own assigned branch. Accessing any other branch ID returns `403 Forbidden`.
 
 ---
 
