@@ -397,9 +397,9 @@ class TransactionTest extends TestCase
 
     // ─── Approve ─────────────────────────────────────────────────────────────────
 
-    public function test_compliance_can_approve_flagged_transaction(): void
+    public function test_manager_can_approve_flagged_transaction(): void
     {
-        Sanctum::actingAs($this->compliance);
+        Sanctum::actingAs($this->manager);
         $txn = Transaction::factory()->create([
             'account_id' => $this->account->id,
             'status'     => 'flagged',
@@ -416,9 +416,21 @@ class TransactionTest extends TestCase
         $this->assertNotNull($txn->fresh()->approved_at);
     }
 
-    public function test_approving_pending_deposit_adds_to_balance(): void
+    public function test_compliance_cannot_approve_transaction(): void
     {
         Sanctum::actingAs($this->compliance);
+        $txn = Transaction::factory()->create([
+            'account_id' => $this->account->id,
+            'status'     => 'flagged',
+            'amount'     => 200.00,
+        ]);
+
+        $this->postJson("/api/transactions/{$txn->id}/approve")->assertStatus(403);
+    }
+
+    public function test_approving_pending_deposit_adds_to_balance(): void
+    {
+        Sanctum::actingAs($this->manager);
         $initialBalance = (float) $this->account->balance;
 
         $txn = Transaction::factory()->create([
@@ -435,7 +447,7 @@ class TransactionTest extends TestCase
 
     public function test_approve_returns_404_for_already_completed_transaction(): void
     {
-        Sanctum::actingAs($this->compliance);
+        Sanctum::actingAs($this->manager);
         $txn = Transaction::factory()->create([
             'account_id' => $this->account->id,
             'status'     => 'completed',
