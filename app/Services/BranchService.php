@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Branch;
 use App\Models\User;
+use App\Enums\Role;
+use App\Support\BranchScope;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -25,6 +27,7 @@ class BranchService
     {
         $perPage = (int) ($filters['per_page'] ?? $perPage ?? 15);
         $user    = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
         $query = Branch::query()
             ->with('manager')
@@ -32,7 +35,7 @@ class BranchService
             ->filter($filters);
 
         // Branch Managers and CSRs see only their assigned branch
-        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             $query->where('id', $user->branch_id);
         }
 
@@ -55,8 +58,9 @@ class BranchService
     public function getBranchDetails(string|int $id, ?User $user = null): Branch
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
-        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             if ((int) $id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. You may only access your assigned branch.');
             }

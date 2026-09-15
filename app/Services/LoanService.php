@@ -3,11 +3,14 @@
 namespace App\Services;
 
 use App\Models\Alert;
-use App\Models\Customer;
+use App\Support\DashboardCache;use App\Models\Customer;
 use App\Models\Loan;
 use App\Models\User;
+use App\Enums\Role;
+use App\Support\BranchScope;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -43,16 +46,17 @@ class LoanService
     {
         $perPage = (int) ($filters['per_page'] ?? $perPage ?? 15);
         $user    = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
         $query = Loan::query()
             ->with('customer.branch')
             ->filter($filters);
 
         // Role-based restrictions hook
-        if ($user && $user->role === 'compliance') {
+        if ($user && $user->role === Role::Compliance->value) {
             // Compliance officers only see delinquent or defaulted loans
             $query->whereIn('status', ['delinquent', 'defaulted']);
-        } elseif ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        } elseif ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             // Manager & CSR only see loans belonging to customers in their branch
             $query->whereHas('customer', fn ($q) => $q->where('branch_id', $user->branch_id));
         }
@@ -76,15 +80,16 @@ class LoanService
     public function getLoanDetails(string|int $id, ?User $user = null): Loan
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
         $loan = Loan::with('customer.branch')->findOrFail($id);
 
-        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             if ((int) $loan->customer?->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Loan does not belong to your assigned branch.');
             }
         }
 
-        if ($user && $user->role === 'compliance') {
+        if ($user && $user->role === Role::Compliance->value) {
             if (! in_array($loan->status, ['delinquent', 'defaulted'], true)) {
                 throw new AccessDeniedHttpException('Access forbidden. Compliance officers may only view delinquent or defaulted loans.');
             }
@@ -99,12 +104,13 @@ class LoanService
     public function applyForLoan(array $data, ?User $user = null): Loan
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
-        if ($user && $user->role === 'csr') {
+        if ($user && $user->role === Role::Csr->value) {
             throw new AccessDeniedHttpException('Access forbidden. CSR cannot create loans.');
         }
 
-        if ($user && $user->role === 'manager' && $user->branch_id) {
+        if ($user && $user->role === Role::Manager->value && $user->branch_id) {
             $customer = Customer::findOrFail($data['customer_id']);
             if ((int) $customer->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Cannot create loan for customer outside your assigned branch.');
@@ -113,15 +119,16 @@ class LoanService
 
         $startDate = Carbon::parse($data['start_date']);
 
-        $data['loan_number']         = 'LN-' . date('Y') . '-' . rand(10000, 99999);
+        $data['loan_number']         = 'LN-' . date('Y') . '-' . Str::upper((string) Str::ulid());
         $data['outstanding_balance'] = $data['principal_amount'];
         $data['status']              = 'pending';
         $data['end_date']            = $startDate->copy()->addMonths((int) $data['term_months'])->toDateString();
         $data['next_payment_date']   = $startDate->copy()->addMonth()->toDateString();
 
         $loan = Loan::create($data);
-
-        return $loan->load('customer');
+        $loan = $loan->load('customer');
+        DashboardCache::flushReports();
+        return $loan;
     }
 
     /**
@@ -130,15 +137,16 @@ class LoanService
     public function updateLoan(Loan|string|int $loan, array $data, ?User $user = null): Loan
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
-        if ($user && $user->role === 'csr') {
+        if ($user && $user->role === Role::Csr->value) {
             throw new AccessDeniedHttpException('Access forbidden. CSR cannot update loans.');
         }
 
         return DB::transaction(function () use ($loan, $data, $user) {
             $loan = $loan instanceof Loan ? $loan : Loan::with('customer')->findOrFail($loan);
 
-            if ($user && $user->role === 'manager' && $user->branch_id) {
+            if ($user && $user->role === Role::Manager->value && $user->branch_id) {
                 if ((int) $loan->customer?->branch_id !== (int) $user->branch_id) {
                     throw new AccessDeniedHttpException('Access forbidden. Cannot update loan outside your assigned branch.');
                 }
@@ -175,7 +183,9 @@ class LoanService
                 $loan->update(['status' => 'completed', 'outstanding_balance' => 0]);
             }
 
-            return $loan->fresh('customer');
+            $updated = $loan->fresh('customer');
+            DashboardCache::flushReports();
+            return $updated;
         });
     }
 
@@ -185,8 +195,9 @@ class LoanService
     public function approveLoan(Loan|string|int $loan, ?User $user = null): Loan
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
-        if ($user && $user->role === 'compliance') {
+        if ($user && $user->role === Role::Compliance->value) {
             throw new AccessDeniedHttpException('Access forbidden. Compliance officers cannot approve loans.');
         }
 
@@ -194,15 +205,16 @@ class LoanService
             ? $loan
             : Loan::with('customer')->where('status', 'pending')->findOrFail($loan);
 
-        if ($user && $user->role === 'manager' && $user->branch_id) {
+        if ($user && $user->role === Role::Manager->value && $user->branch_id) {
             if ((int) $loan->customer?->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Cannot approve loan outside your assigned branch.');
             }
         }
 
         $loan->update(['status' => 'active']);
-
-        return $loan->fresh('customer');
+        $loan = $loan->fresh('customer');
+        DashboardCache::flushReports();
+        return $loan;
     }
 
     /**

@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Enums\Role;
+use App\Support\BranchScope;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -25,13 +27,14 @@ class UserService
     {
         $perPage = (int) ($filters['per_page'] ?? $perPage ?? 15);
         $user    = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
         $query = User::query()
             ->with('branch')
             ->filter($filters);
 
         // Role-based restrictions hook
-        if ($user && $user->role === 'manager' && $user->branch_id) {
+        if ($user && $user->role === Role::Manager->value && $user->branch_id) {
             // Manager only sees employees belonging to their assigned branch
             $query->where('branch_id', $user->branch_id);
         }
@@ -56,9 +59,10 @@ class UserService
     public function getUserDetails(string|int $id, ?User $user = null): User
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
         $targetUser = User::with('branch')->findOrFail($id);
 
-        if ($user && $user->role === 'manager' && $user->branch_id) {
+        if ($user && $user->role === Role::Manager->value && $user->branch_id) {
             if ((int) $targetUser->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. User does not belong to your assigned branch.');
             }

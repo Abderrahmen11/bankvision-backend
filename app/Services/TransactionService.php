@@ -6,7 +6,11 @@ use App\Models\Account;
 use App\Models\Alert;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Enums\Role;
+use App\Support\BranchScope;
+use App\Support\DashboardCache;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -28,22 +32,23 @@ class TransactionService
     {
         $perPage = (int) ($filters['per_page'] ?? $perPage ?? 15);
         $user    = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
         $query = Transaction::query()
             ->with(['account.customer', 'approver'])
             ->filter($filters);
 
         // Role-based restrictions hook
-        if ($user && $user->role === 'compliance') {
+        if ($user && $user->role === Role::Compliance->value) {
             // Compliance officers monitor transactions relevant to compliance and suspicious activity:
-            // flagged status, high value (>= 10000), wire transfers, or transactions with triggered alerts
+            // flagged status, high value (>= configured threshold), wire transfers, or transactions with triggered alerts
             $query->where(function ($q) {
                 $q->where('status', 'flagged')
-                  ->orWhere('amount', '>=', 10000)
+                  ->orWhere('amount', '>=', (int) config('banking.high_value_transaction_threshold'))
                   ->orWhere('transaction_type', 'wire')
                   ->orWhereHas('alerts');
             });
-        } elseif ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        } elseif ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             // Manager & CSR only see transactions belonging to accounts in their branch
             $query->whereHas('account.customer', fn ($q) => $q->where('branch_id', $user->branch_id));
         }
@@ -68,17 +73,18 @@ class TransactionService
     public function getTransactionDetails(string|int $id, ?User $user = null): Transaction
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
         $transaction = Transaction::with(['account.customer', 'approver'])->findOrFail($id);
 
-        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             if ((int) $transaction->account?->customer?->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Transaction does not belong to your assigned branch.');
             }
         }
 
-        if ($user && $user->role === 'compliance') {
+        if ($user && $user->role === Role::Compliance->value) {
             $isComplianceRelevant = $transaction->status === 'flagged'
-                || (float) $transaction->amount >= 10000
+                || (float) $transaction->amount >= (int) config('banking.high_value_transaction_threshold')
                 || $transaction->transaction_type === 'wire'
                 || $transaction->alerts()->exists();
 
@@ -98,35 +104,90 @@ class TransactionService
     public function recordTransaction(array $data, ?User $user = null): Transaction
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
-        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             $account = Account::with('customer')->findOrFail($data['account_id']);
             if ((int) $account->customer?->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Cannot record transaction for account outside your assigned branch.');
             }
+
+            // Destination-account branch authorization (IDOR guard)
+            if (! empty($data['destination_account_id'])) {
+                $destAccount = Account::with('customer')->findOrFail($data['destination_account_id']);
+                if ((int) $destAccount->customer?->branch_id !== (int) $user->branch_id) {
+                    throw new AccessDeniedHttpException('Access forbidden. Cannot transfer to an account outside your assigned branch.');
+                }
+            }
         }
 
-        if ($user && $user->role === 'csr') {
+        if ($user && $user->role === Role::Csr->value) {
             if (! in_array($data['transaction_type'] ?? '', ['deposit', 'withdrawal'], true)) {
                 throw new AccessDeniedHttpException('CSR can only process basic deposits and withdrawals.');
             }
         }
 
-        return DB::transaction(function () use ($data) {
-            $data['transaction_number'] = 'TXN-' . date('Y') . '-' . rand(100000, 999999);
+        $transaction = DB::transaction(function () use ($data) {
+            $data['transaction_number'] = 'TXN-' . date('Y') . '-' . Str::upper((string) Str::ulid());
             $data['transaction_date']   = now();
             $data['status']             = $data['status'] ?? 'completed';
             $data['channel']            = $data['channel'] ?? 'branch';
 
+            $sourceAccount = Account::whereKey($data['account_id'])->lockForUpdate()->firstOrFail();
+            if (($data['currency'] ?? $sourceAccount->currency) !== $sourceAccount->currency) {
+                throw ValidationException::withMessages([
+                    'currency' => 'Transaction currency must match the source account currency.',
+                ]);
+            }
+            $data['currency'] = $sourceAccount->currency;
+
+            if (in_array($data['transaction_type'], ['transfer', 'wire'], true) && $data['status'] === 'pending') {
+                throw ValidationException::withMessages([
+                    'status' => 'Transfers and wires must be completed atomically.',
+                ]);
+            }
+
+            $destinationAccount = null;
+            if (! empty($data['destination_account_id'])) {
+                $destinationAccount = Account::whereKey($data['destination_account_id'])->lockForUpdate()->firstOrFail();
+                if ($destinationAccount->currency !== $sourceAccount->currency) {
+                    throw ValidationException::withMessages([
+                        'destination_account_id' => 'Destination account currency must match the source account currency.',
+                    ]);
+                }
+                if (! $destinationAccount->canTransact()) {
+                    throw ValidationException::withMessages([
+                        'destination_account_id' => 'Destination account is not active.',
+                    ]);
+                }
+            }
+
             // Update account balance immediately only for completed transactions
             if ($data['status'] === 'completed') {
-                $this->applyBalanceChange($data['account_id'], $data['transaction_type'], (float) $data['amount']);
+                $this->applyBalanceChange($sourceAccount, $data['transaction_type'], $data['amount']);
+                if ($destinationAccount) {
+                    $this->applyBalanceChange($destinationAccount, 'deposit', $data['amount']);
+                }
             }
 
             $transaction = Transaction::create($data);
 
+            if ($destinationAccount) {
+                Transaction::create([
+                    ...$data,
+                    'transaction_number' => $data['transaction_number'] . '-CREDIT',
+                    'account_id' => $destinationAccount->id,
+                    'destination_account_id' => null,
+                    'transaction_type' => 'deposit',
+                    'counterparty' => $sourceAccount->account_number,
+                ]);
+            }
+
             return $transaction->load(['account.customer', 'approver']);
         });
+
+        DashboardCache::flushAll();
+        return $transaction;
     }
 
     /**
@@ -134,16 +195,17 @@ class TransactionService
      */
     public function approveTransaction(Transaction|string|int $transaction, User $approver): Transaction
     {
-        if ($approver->role === 'compliance') {
+        BranchScope::ensure($approver);
+        if ($approver->role === Role::Compliance->value) {
             throw new AccessDeniedHttpException('Access forbidden. Compliance officers cannot approve transactions.');
         }
 
-        return DB::transaction(function () use ($transaction, $approver) {
+        $approved = DB::transaction(function () use ($transaction, $approver) {
             $transaction = $transaction instanceof Transaction
                 ? $transaction
                 : Transaction::with('account.customer')->whereIn('status', ['flagged', 'pending'])->findOrFail($transaction);
 
-            if ($approver->role === 'manager' && $approver->branch_id) {
+            if ($approver->role === Role::Manager->value && $approver->branch_id) {
                 if ((int) $transaction->account?->customer?->branch_id !== (int) $approver->branch_id) {
                     throw new AccessDeniedHttpException('Access forbidden. Cannot approve transaction outside your assigned branch.');
                 }
@@ -151,10 +213,16 @@ class TransactionService
 
             // If approving a pending transaction, now apply the balance change
             if ($transaction->status === 'pending') {
+                $account = Account::whereKey($transaction->account_id)->lockForUpdate()->firstOrFail();
+                if ($transaction->currency !== $account->currency) {
+                    throw ValidationException::withMessages([
+                        'currency' => 'Transaction currency must match the account currency.',
+                    ]);
+                }
                 $this->applyBalanceChange(
-                    $transaction->account_id,
+                    $account,
                     $transaction->transaction_type,
-                    (float) $transaction->amount
+                    (string) $transaction->amount
                 );
             }
 
@@ -166,6 +234,9 @@ class TransactionService
 
             return $transaction->fresh(['account.customer', 'approver']);
         });
+
+        DashboardCache::flushAll();
+        return $approved;
     }
 
     /**
@@ -175,13 +246,14 @@ class TransactionService
     public function flagTransaction(Transaction|string|int $transaction, ?User $user = null): Transaction
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
-        return DB::transaction(function () use ($transaction, $user) {
+        $flagged = DB::transaction(function () use ($transaction, $user) {
             $transaction = $transaction instanceof Transaction
                 ? $transaction
                 : Transaction::with('account.customer')->where('status', 'completed')->findOrFail($transaction);
 
-            if ($user && $user->role === 'manager' && $user->branch_id) {
+            if ($user && $user->role === Role::Manager->value && $user->branch_id) {
                 if ((int) $transaction->account?->customer?->branch_id !== (int) $user->branch_id) {
                     throw new AccessDeniedHttpException('Access forbidden. Cannot flag transaction outside your assigned branch.');
                 }
@@ -206,17 +278,20 @@ class TransactionService
                 ]);
             }
 
+            DashboardCache::flushAll();
+
             return $transaction->fresh(['account.customer', 'approver']);
         });
+
+        DashboardCache::flushAll();
+        return $flagged;
     }
 
     /**
      * Validate account is active and apply a debit or credit to its balance using pessimistic locking.
      */
-    private function applyBalanceChange(int|string $accountId, string $type, float $amount): void
+    private function applyBalanceChange(Account $account, string $type, string|int|float $amount): void
     {
-        $account = Account::where('id', $accountId)->lockForUpdate()->firstOrFail();
-
         if ($account->status === 'frozen') {
             throw ValidationException::withMessages([
                 'message' => 'Cannot process transactions on frozen account.',
@@ -235,15 +310,30 @@ class TransactionService
             ]);
         }
 
-        if (in_array($type, ['withdrawal', 'transfer', 'wire'], true)) {
-            if ((float) $account->balance < $amount) {
+        $amountMinor = $this->toMinorUnits($amount);
+        $balanceMinor = $this->toMinorUnits((string) $account->balance);
+        $isDebit = in_array($type, ['withdrawal', 'transfer', 'wire'], true);
+        $newBalanceMinor = $isDebit ? $balanceMinor - $amountMinor : $balanceMinor + $amountMinor;
+
+        if ($newBalanceMinor < 0) {
                 throw ValidationException::withMessages([
                     'message' => 'Insufficient funds. Account balance cannot be negative.',
                 ]);
-            }
-            $account->decrement('balance', $amount);
-        } else {
-            $account->increment('balance', $amount);
         }
+
+        $account->update(['balance' => number_format($newBalanceMinor / 100, 2, '.', '')]);
+    }
+
+    private function toMinorUnits(string|int|float $amount): int
+    {
+        $value = trim((string) $amount);
+        if (! preg_match('/^\d+(?:\.\d{1,2})?$/', $value)) {
+            throw ValidationException::withMessages([
+                'amount' => 'Amount must contain no more than two decimal places.',
+            ]);
+        }
+
+        [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '0');
+        return ((int) $whole * 100) + (int) str_pad($fraction, 2, '0');
     }
 }

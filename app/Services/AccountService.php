@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\Account;
-use App\Models\Customer;
+use App\Support\DashboardCache;use App\Models\Customer;
 use App\Models\User;
+use App\Enums\Role;
+use App\Support\BranchScope;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class AccountService
@@ -26,20 +29,21 @@ class AccountService
     {
         $perPage  = (int) ($filters['per_page'] ?? $perPage ?? 15);
         $user     = $user ?? auth()->user();
+            if ($user) BranchScope::ensure($user);
 
         $query = Account::query()
             ->with('customer.branch')
             ->filter($filters);
 
         // Role-based restrictions hook
-        if ($user && $user->role === 'compliance') {
+        if ($user && $user->role === Role::Compliance->value) {
             // Compliance officers only see flagged/high-risk accounts
             $query->where(function ($q) {
                 $q->where('status', 'frozen')
                   ->orWhereHas('customer', fn ($cq) => $cq->where('risk_level', 'high'))
                   ->orWhereHas('alerts');
             });
-        } elseif ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        } elseif ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             // Manager & CSR only see accounts belonging to customers in their branch
             $query->whereHas('customer', fn ($q) => $q->where('branch_id', $user->branch_id));
         }
@@ -61,15 +65,16 @@ class AccountService
     public function getAccountDetails(string|int $id, ?User $user = null): Account
     {
         $user = $user ?? auth()->user();
+            if ($user) BranchScope::ensure($user);
         $account = Account::with('customer.branch')->findOrFail($id);
 
-        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             if ((int) $account->customer?->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Account does not belong to your assigned branch.');
             }
         }
 
-        if ($user && $user->role === 'compliance') {
+        if ($user && $user->role === Role::Compliance->value) {
             $isFlaggedOrHighRisk = $account->status === 'frozen'
                 || $account->customer?->risk_level === 'high'
                 || $account->alerts()->exists();
@@ -88,17 +93,21 @@ class AccountService
     public function openAccount(array $data, ?User $user = null): Account
     {
         $user = $user ?? auth()->user();
+            if ($user) BranchScope::ensure($user);
 
-        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             $customer = Customer::findOrFail($data['customer_id']);
             if ((int) $customer->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Cannot open account for customer outside your assigned branch.');
             }
         }
 
-        $data['account_number'] = 'ACC-' . date('Y') . '-' . rand(10000, 99999);
+        $data['account_number'] = 'ACC-' . date('Y') . '-' . Str::upper((string) Str::ulid());
         $data['opened_date']    = $data['opened_date'] ?? date('Y-m-d');
         $data['status']         = 'active';
+        if (isset($data['opening_balance']) && !isset($data['balance'])) {
+            $data['balance'] = $data['opening_balance'];
+        }
 
         $account = Account::create($data);
 
@@ -111,15 +120,18 @@ class AccountService
     public function updateAccount(Account|string|int $account, array $data, ?User $user = null): Account
     {
         $user = $user ?? auth()->user();
+            if ($user) BranchScope::ensure($user);
         $account = $account instanceof Account ? $account : Account::findOrFail($account);
 
-        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             if ((int) $account->customer?->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Account does not belong to your assigned branch.');
             }
         }
 
         $account->update($data);
+
+        DashboardCache::flushStats();
 
         return $account->fresh('customer');
     }
@@ -130,15 +142,20 @@ class AccountService
     public function closeAccount(Account|string|int $account, ?User $user = null): bool
     {
         $user = $user ?? auth()->user();
+            if ($user) BranchScope::ensure($user);
         $account = $account instanceof Account ? $account : Account::findOrFail($account);
 
-        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             if ((int) $account->customer?->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Account does not belong to your assigned branch.');
             }
         }
 
-        return $account->update(['status' => 'closed']);
+        $updated = $account->update(['status' => 'closed']);
+
+        DashboardCache::flushStats();
+
+        return $updated;
     }
 
     /**
@@ -147,9 +164,10 @@ class AccountService
     public function getAccountTransactions(Account|string|int $account, array $filters = [], int $perPage = 15, ?User $user = null): LengthAwarePaginator
     {
         $user = $user ?? auth()->user();
+            if ($user) BranchScope::ensure($user);
         $account = $account instanceof Account ? $account : Account::findOrFail($account);
 
-        if ($user && in_array($user->role, ['manager', 'csr'], true) && $user->branch_id) {
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $user->branch_id) {
             if ((int) $account->customer?->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Account does not belong to your assigned branch.');
             }

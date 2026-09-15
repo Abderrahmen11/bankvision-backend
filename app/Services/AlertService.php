@@ -3,12 +3,16 @@
 namespace App\Services;
 
 use App\Models\Account;
-use App\Models\Alert;
+use App\Support\DashboardCache;use App\Models\Alert;
 use App\Models\Customer;
 use App\Models\Loan;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\Notification;
+use App\Enums\Role;
+use App\Support\BranchScope;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Mail;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class AlertService
@@ -28,19 +32,20 @@ class AlertService
     {
         $perPage = (int) ($filters['per_page'] ?? $perPage ?? 15);
         $user    = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
 
         $query = Alert::query()
             ->with(['assignedTo', 'alertable'])
             ->filter($filters);
 
         // Role-based restrictions hook
-        if ($user && $user->role === 'analyst') {
+        if ($user && $user->role === Role::Analyst->value) {
             // Risk analyst: only risk-related alerts
             $query->where(function ($q) {
                 $q->whereIn('alert_type', ['suspicious_transaction', 'loan_delinquent', 'defaulted_loan'])
                   ->orWhere('severity', 'high');
             });
-        } elseif ($user && $user->role === 'csr' && $user->branch_id) {
+        } elseif ($user && $user->role === Role::Csr->value && $user->branch_id) {
             // CSR: only customer-related alerts in their branch
             $branchId = $user->branch_id;
             $query->where(function ($q) use ($branchId) {
@@ -52,7 +57,7 @@ class AlertService
                        ->whereHasMorph('alertable', [Customer::class], fn ($c) => $c->where('branch_id', $branchId));
                 });
             });
-        } elseif ($user && in_array($user->role, ['manager'], true) && $user->branch_id) {
+        } elseif ($user && $user->role === Role::Manager->value && $user->branch_id) {
             // Manager only see alerts originating from or assigned to their branch
             $branchId = $user->branch_id;
             $query->where(function ($q) use ($branchId, $user) {
@@ -97,22 +102,23 @@ class AlertService
     public function getAlertDetails(string|int $id, ?User $user = null): Alert
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
         $alert = Alert::with(['assignedTo', 'alertable'])->findOrFail($id);
 
-        if ($user && $user->role === 'manager' && $user->branch_id) {
+        if ($user && $user->role === Role::Manager->value && $user->branch_id) {
             if (! $this->alertBelongsToBranch($alert, (int) $user->branch_id)) {
                 throw new AccessDeniedHttpException('Access forbidden. Alert does not belong to your assigned branch.');
             }
         }
 
-        if ($user && $user->role === 'csr' && $user->branch_id) {
+        if ($user && $user->role === Role::Csr->value && $user->branch_id) {
             $isCustomerRelated = $alert->alertable_type === Customer::class || $alert->alert_type === 'kyc_expiring';
             if (! $isCustomerRelated || ! $this->alertBelongsToBranch($alert, (int) $user->branch_id)) {
                 throw new AccessDeniedHttpException('Access forbidden. CSR can only view customer-related alerts for their assigned branch.');
             }
         }
 
-        if ($user && $user->role === 'analyst') {
+        if ($user && $user->role === Role::Analyst->value) {
             $isRiskRelated = in_array($alert->alert_type, ['suspicious_transaction', 'loan_delinquent', 'defaulted_loan'], true) || $alert->severity === 'high';
             if (! $isRiskRelated) {
                 throw new AccessDeniedHttpException('Access forbidden. Risk Analysts can only view risk-related alerts.');
@@ -128,11 +134,12 @@ class AlertService
     public function resolveAlert(Alert|string|int $alert, ?User $user = null): Alert
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
         $alert = $alert instanceof Alert
             ? $alert
             : Alert::with(['assignedTo', 'alertable'])->whereIn('status', ['open', 'in-progress'])->findOrFail($alert);
 
-        if ($user && $user->role === 'manager' && $user->branch_id) {
+        if ($user && $user->role === Role::Manager->value && $user->branch_id) {
             if (! $this->alertBelongsToBranch($alert, (int) $user->branch_id)) {
                 throw new AccessDeniedHttpException('Access forbidden. Cannot resolve alert outside your assigned branch.');
             }
@@ -143,6 +150,8 @@ class AlertService
             'resolved_at' => now(),
         ]);
 
+        DashboardCache::flushRecentActivity();
+
         return $alert->fresh(['assignedTo', 'alertable']);
     }
 
@@ -152,12 +161,21 @@ class AlertService
     public function assignAlert(Alert|string|int $alert, int $userId, ?User $user = null): Alert
     {
         $user = $user ?? auth()->user();
+        if ($user) BranchScope::ensure($user);
         $alert = $alert instanceof Alert ? $alert : Alert::with(['assignedTo', 'alertable'])->findOrFail($alert);
 
-        if ($user && $user->role === 'manager' && $user->branch_id) {
+        if ($user && $user->role === Role::Manager->value && $user->branch_id) {
             if (! $this->alertBelongsToBranch($alert, (int) $user->branch_id)) {
                 throw new AccessDeniedHttpException('Access forbidden. Cannot assign alert outside your assigned branch.');
             }
+        }
+
+        $assignee = User::findOrFail($userId);
+        if ($assignee->status !== 'active') {
+            throw new AccessDeniedHttpException('Access forbidden. Alerts can only be assigned to active staff.');
+        }
+        if ($user && $user->role === Role::Manager->value && (int) $assignee->branch_id !== (int) $user->branch_id) {
+            throw new AccessDeniedHttpException('Access forbidden. Cannot assign an alert outside your assigned branch.');
         }
 
         $alert->update([
@@ -165,7 +183,50 @@ class AlertService
             'status'      => $alert->status === 'open' ? 'in-progress' : $alert->status,
         ]);
 
+        DashboardCache::flushRecentActivity();
+
+        $this->notifyAssignment($alert->fresh(['assignedTo', 'alertable']), $user);
+
         return $alert->fresh(['assignedTo', 'alertable']);
+    }
+
+    /**
+     * Notify the assignee that an alert has been assigned to them:
+     * in-app notification (bell icon) + email when their preferences allow it.
+     */
+    private function notifyAssignment(Alert $alert, ?User $actor): void
+    {
+        $assignee = $alert->assignedTo;
+        if (!$assignee) {
+            return;
+        }
+
+        $title = sprintf('Alert %s assigned to you', $alert->alert_number);
+        $message = $alert->description ?: ucfirst(str_replace('_', ' ', $alert->alert_type));
+        $link = '/alerts/' . $alert->id;
+
+        Notification::announce(
+            $assignee->id,
+            $title,
+            $message,
+            $link,
+            in_array($alert->severity, ['critical', 'high'], true) ? 'warning' : 'info'
+        );
+
+        // Email only if the assignee opted into email notifications
+        $prefs = $assignee->settings()->first()?->notifications() ?? [];
+        if (!empty($prefs['email_notifications'])) {
+            try {
+                Mail::raw(
+                    "Hello {$assignee->name},\n\n{$title}.\n\n{$message}\n\nOpen it in BankVision: {$link}\n\n- BankVision Alert System",
+                    function ($mail) use ($assignee, $title) {
+                        $mail->to($assignee->email)->subject("[BankVision] {$title}");
+                    }
+                );
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
     }
 
     /**
