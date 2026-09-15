@@ -95,7 +95,7 @@ class Customer extends Model
     {
         return $query
             ->search($filters['search'] ?? null)
-            ->when($filters['type'] ?? null,       fn ($q, $t) => $q->where('customer_type', $t))
+            ->when($filters['type'] ?? $filters['customer_type'] ?? null, fn ($q, $t) => $q->where('customer_type', $t))
             ->when($filters['kyc_status'] ?? null, fn ($q, $k) => $q->where('kyc_status', $k))
             ->when($filters['risk_level'] ?? null, fn ($q, $r) => $q->where('risk_level', $r))
             ->when($filters['branch_id'] ?? null,  fn ($q, $b) => $q->where('branch_id', $b));

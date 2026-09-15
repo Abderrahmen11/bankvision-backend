@@ -100,7 +100,7 @@ class Account extends Model
         return $query
             ->search($filters['search'] ?? null)
             ->when($filters['customer_id'] ?? null, fn($q, $c) => $q->where('customer_id', $c))
-            ->when($filters['type'] ?? null, fn($q, $t) => $q->where('account_type', $t))
+            ->when($filters['type'] ?? $filters['account_type'] ?? null, fn($q, $t) => $q->where('account_type', $t))
             ->when($filters['status'] ?? null, fn($q, $s) => $q->where('status', $s))
             ->when($filters['currency'] ?? null, fn($q, $c) => $q->where('currency', $c))
             ->when(

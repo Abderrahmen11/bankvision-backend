@@ -30,6 +30,7 @@ class User extends Authenticatable
         'status',
         'last_login_at',
         'phone',
+        'avatar',
     ];
 
     /**
@@ -86,6 +87,30 @@ class User extends Authenticatable
     public function dashboardLayout(): HasOne
     {
         return $this->hasOne(DashboardLayout::class);
+    }
+
+    /**
+     * Get the settings row for this user (2FA, notifications, preferences).
+     */
+    public function settings(): HasOne
+    {
+        return $this->hasOne(UserSetting::class);
+    }
+
+    /**
+     * Get the authentication event trail for this user.
+     */
+    public function loginActivities(): HasMany
+    {
+        return $this->hasMany(LoginActivity::class);
+    }
+
+    /**
+     * Lazily resolve (and create if missing) the settings row for this user.
+     */
+    public function settingsOrCreate(): UserSetting
+    {
+        return $this->settings()->firstOrCreate(['user_id' => $this->id]);
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
@@ -22,7 +23,7 @@ class Alert extends Model
 
         static::creating(function (self $alert) {
             if (empty($alert->alert_number)) {
-                $alert->alert_number = 'ALT-' . date('Y') . '-' . rand(10000, 99999);
+                $alert->alert_number = 'ALT-' . date('Y') . '-' . Str::upper((string) Str::ulid());
             }
         });
     }

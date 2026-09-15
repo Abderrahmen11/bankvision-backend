@@ -16,6 +16,7 @@ class Transaction extends Model
     protected $fillable = [
         'transaction_number',
         'account_id',
+        'destination_account_id',
         'transaction_type',
         'amount',
         'currency',
@@ -40,6 +41,11 @@ class Transaction extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    public function destinationAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'destination_account_id');
     }
 
     /**
