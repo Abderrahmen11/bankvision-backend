@@ -12,6 +12,15 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class TransactionFactory extends Factory
 {
+    public function configure(): static
+    {
+        return $this->afterMaking(function (Transaction $transaction): void {
+            if ($transaction->account_id) {
+                $transaction->currency = Account::find($transaction->account_id)?->currency ?? $transaction->currency;
+            }
+        });
+    }
+
     /**
      * Define the model's default state.
      *

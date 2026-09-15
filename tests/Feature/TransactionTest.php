@@ -302,6 +302,109 @@ class TransactionTest extends TestCase
         $this->assertEquals($initialBalance + 1500.00, (float) $this->account->fresh()->balance);
     }
 
+    public function test_transaction_currency_must_match_account_currency(): void
+    {
+        Sanctum::actingAs($this->manager);
+        $this->account->update(['currency' => 'USD']);
+
+        $this->postJson('/api/transactions', [
+            'account_id' => $this->account->id,
+            'transaction_type' => 'deposit',
+            'amount' => '10.00',
+            'currency' => 'EUR',
+        ])->assertStatus(422)->assertJsonValidationErrors(['currency']);
+    }
+
+    public function test_internal_transfer_moves_exact_amount_between_accounts(): void
+    {
+        Sanctum::actingAs($this->manager);
+        $this->account->update(['currency' => 'USD', 'balance' => '5000.00']);
+        $destination = Account::factory()->create([
+            'customer_id' => $this->customer->id,
+            'currency' => 'USD',
+            'status' => 'active',
+            'balance' => '100.00',
+        ]);
+
+        $this->postJson('/api/transactions', [
+            'account_id' => $this->account->id,
+            'destination_account_id' => $destination->id,
+            'transaction_type' => 'transfer',
+            'amount' => '0.01',
+            'currency' => 'USD',
+        ])->assertStatus(201);
+
+        $this->assertSame('4999.99', (string) $this->account->fresh()->balance);
+        $this->assertSame('100.01', (string) $destination->fresh()->balance);
+        $this->assertDatabaseHas('transactions', [
+            'account_id' => $this->account->id,
+            'destination_account_id' => $destination->id,
+            'transaction_type' => 'transfer',
+            'amount' => '0.01',
+        ]);
+        $this->assertDatabaseHas('transactions', [
+            'account_id' => $destination->id,
+            'transaction_type' => 'deposit',
+            'counterparty' => $this->account->account_number,
+            'amount' => '0.01',
+        ]);
+    }
+
+    public function test_manager_cannot_transfer_to_account_in_different_branch(): void
+    {
+        Sanctum::actingAs($this->manager);
+        $otherBranch = Branch::factory()->create(['status' => 'active']);
+        $otherCustomer = Customer::factory()->create(['branch_id' => $otherBranch->id]);
+        $otherAccount = Account::factory()->create([
+            'customer_id' => $otherCustomer->id,
+            'currency'    => 'USD',
+            'status'      => 'active',
+            'balance'     => '500.00',
+        ]);
+
+        $this->account->update(['currency' => 'USD', 'balance' => '1000.00']);
+
+        $response = $this->postJson('/api/transactions', [
+            'account_id'             => $this->account->id,
+            'destination_account_id' => $otherAccount->id,
+            'transaction_type'       => 'transfer',
+            'amount'                 => '50.00',
+            'currency'               => 'USD',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_transaction_resource_includes_destination_account_details(): void
+    {
+        Sanctum::actingAs($this->manager);
+        $this->account->update(['currency' => 'USD', 'balance' => '5000.00']);
+        $destination = Account::factory()->create([
+            'customer_id' => $this->customer->id,
+            'currency'    => 'USD',
+            'status'      => 'active',
+            'balance'     => '100.00',
+        ]);
+
+        $response = $this->postJson('/api/transactions', [
+            'account_id'             => $this->account->id,
+            'destination_account_id' => $destination->id,
+            'transaction_type'       => 'transfer',
+            'amount'                 => '100.00',
+            'currency'               => 'USD',
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.destination_account_id', $destination->id)
+            ->assertJsonPath('data.account_id', $this->account->id);
+
+        $txnId = $response->json('data.id');
+        $showResponse = $this->getJson("/api/transactions/{$txnId}");
+        $showResponse->assertStatus(200)
+            ->assertJsonPath('data.destination_account_id', $destination->id)
+            ->assertJsonPath('data.account_id', $this->account->id);
+    }
+
     public function test_withdrawal_decreases_account_balance(): void
     {
         Sanctum::actingAs($this->csr);
