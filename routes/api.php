@@ -217,4 +217,46 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('audit-logs',      [AuditLogController::class, 'index']);
         Route::get('audit-logs/{id}', [AuditLogController::class, 'show']);
     });
+
+    /*
+    |----------------------------------------------------------------------
+    | Settings — every role manages own profile/security/notifications;
+    | system configuration & API token registry are admin only
+    |----------------------------------------------------------------------
+    */
+    Route::prefix('settings')->group(function () {
+        // Profile (all roles)
+        Route::put('/profile',                [ProfileController::class, 'update']);
+        Route::put('/profile/password',       [ProfileController::class, 'updatePassword']);
+        Route::post('/profile/avatar',        [ProfileController::class, 'uploadAvatar']);
+        Route::delete('/profile/avatar',      [ProfileController::class, 'destroyAvatar']);
+
+        // Notifications & preferences (all roles)
+        Route::get('/',                       [UserSettingController::class, 'index']);
+        Route::put('/notifications',          [UserSettingController::class, 'updateNotifications']);
+        Route::put('/preferences',            [UserSettingController::class, 'updatePreferences']);
+
+        // Security (all roles)
+        Route::post('/security/2fa',               [SecurityController::class, 'updateTwoFactor']);
+        Route::post('/security/2fa/send-code',     [SecurityController::class, 'sendTwoFactorCode']);
+        Route::post('/security/2fa/verify',        [SecurityController::class, 'verifyTwoFactorCode']);
+        Route::get('/security/sessions',           [SecurityController::class, 'sessions']);
+        Route::delete('/security/sessions/{id}',   [SecurityController::class, 'revokeSession']);
+        Route::post('/security/sessions/revoke-all', [SecurityController::class, 'revokeAllSessions']);
+        Route::get('/security/login-history',      [SecurityController::class, 'loginHistory']);
+
+        // API tokens (admin only)
+        Route::middleware('role:admin')->group(function () {
+            Route::get('/security/tokens',         [SecurityController::class, 'tokens']);
+            Route::post('/security/tokens',        [SecurityController::class, 'storeToken']);
+            Route::delete('/security/tokens/{id}', [SecurityController::class, 'revokeToken']);
+        });
+
+        // System configuration (admin only)
+        Route::middleware('role:admin')->group(function () {
+            Route::get('/system',        [SystemSettingController::class, 'index']);
+            Route::put('/system',        [SystemSettingController::class, 'update']);
+            Route::get('/system/health', [SystemSettingController::class, 'health']);
+        });
+    });
 });
