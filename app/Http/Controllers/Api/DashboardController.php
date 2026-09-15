@@ -62,13 +62,15 @@ class DashboardController extends Controller
     }
 
     /**
-     * Return analytical portfolio and transaction reports.
+     * Return analytical portfolio and transaction reports (supports date range & branch filtering).
      */
     public function reports(Request $request): JsonResponse
     {
+        $filters = $request->only(['start_date', 'end_date', 'branch_id', 'period']);
+
         return response()->json([
             'success' => true,
-            'data'    => $this->dashboardService->getReports($request->user()),
+            'data'    => $this->dashboardService->getReports($request->user(), $filters),
         ]);
     }
 

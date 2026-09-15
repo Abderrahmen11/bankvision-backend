@@ -3,7 +3,8 @@
 namespace App\Services;
 
 use App\Models\DashboardLayout;
-use App\Models\User;
+use App\Enums\AuditAction;
+use App\Services\AuditService;use App\Models\User;
 
 class DashboardLayoutService
 {
@@ -32,13 +33,19 @@ class DashboardLayoutService
      */
     public function saveLayout(User $user, array $layoutData): DashboardLayout
     {
-        return DashboardLayout::updateOrCreate(
+        $layout = DashboardLayout::updateOrCreate(
             ['user_id' => $user->id],
             [
                 'layout_data' => $layoutData,
                 'is_default'  => false,
             ]
         );
+
+        AuditService::log($user, AuditAction::LayoutSaved, 'dashboard_layouts', $layout->id, [], [
+            'widgets' => count($layoutData['widgets'] ?? []),
+        ]);
+
+        return $layout;
     }
 
     /**
@@ -48,13 +55,17 @@ class DashboardLayoutService
     {
         $defaultData = $this->getDefaultLayoutForRole($user->role ?? 'csr');
 
-        return DashboardLayout::updateOrCreate(
+        $layout = DashboardLayout::updateOrCreate(
             ['user_id' => $user->id],
             [
                 'layout_data' => $defaultData,
                 'is_default'  => true,
             ]
         );
+
+        AuditService::log($user, AuditAction::LayoutReset, 'dashboard_layouts', $layout->id);
+
+        return $layout;
     }
 
     /**
@@ -357,14 +368,6 @@ class DashboardLayoutService
                         'visible'  => true,
                         'position' => ['x' => 0, 'y' => 10, 'w' => 8, 'h' => 6],
                         'settings' => ['limit' => 12],
-                    ],
-                    [
-                        'id'       => 'widget-system-health',
-                        'type'     => 'system_health',
-                        'title'    => 'System & Security Health',
-                        'visible'  => true,
-                        'position' => ['x' => 8, 'y' => 10, 'w' => 4, 'h' => 6],
-                        'settings' => [],
                     ],
                 ],
             ],
