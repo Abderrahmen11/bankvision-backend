@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Enums\Role;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
@@ -31,13 +32,13 @@ class AuditLogService
             ->filter($filters);
 
         // Role-based restrictions hook
-        if ($user && $user->role === 'compliance') {
+        if ($user && $user->role === Role::Compliance->value) {
             // Compliance officers see audit logs for compliance-relevant domain tables and actions
             $query->where(function ($q) {
                 $q->whereIn('table_name', ['customers', 'accounts', 'transactions', 'loans', 'alerts'])
                   ->orWhereIn('action', ['approve', 'reject', 'flag', 'freeze', 'update', 'delete']);
             });
-        } elseif ($user && $user->role === 'manager' && $user->branch_id) {
+        } elseif ($user && $user->role === Role::Manager->value && $user->branch_id) {
             // Branch manager only sees audit logs for staff in their branch
             $query->whereHas('user', fn ($q) => $q->where('branch_id', $user->branch_id));
         }
@@ -64,13 +65,13 @@ class AuditLogService
         $user = $user ?? auth()->user();
         $log = AuditLog::with('user')->findOrFail($id);
 
-        if ($user && $user->role === 'manager' && $user->branch_id) {
+        if ($user && $user->role === Role::Manager->value && $user->branch_id) {
             if (! $log->user || (int) $log->user->branch_id !== (int) $user->branch_id) {
                 throw new AccessDeniedHttpException('Access forbidden. Audit log does not belong to your assigned branch.');
             }
         }
 
-        if ($user && $user->role === 'compliance') {
+        if ($user && $user->role === Role::Compliance->value) {
             $isComplianceRelevant = in_array($log->table_name, ['customers', 'accounts', 'transactions', 'loans', 'alerts'], true)
                 || in_array($log->action, ['approve', 'reject', 'flag', 'freeze', 'update', 'delete'], true);
 
