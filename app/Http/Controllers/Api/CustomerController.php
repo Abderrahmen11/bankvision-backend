@@ -9,6 +9,7 @@ use App\Http\Requests\Customer\UpdateCustomerRequest;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\CustomerResource;
 use App\Http\Resources\LoanResource;
+use App\Http\Resources\TransactionResource;
 use App\Services\CustomerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -103,5 +104,15 @@ class CustomerController extends Controller
         $loans = $this->customerService->getCustomerLoans($id, 15, $request->user());
 
         return LoanResource::collection($loans);
+    }
+
+    /**
+     * List all transactions belonging to a specific customer across their accounts.
+     */
+    public function transactions(Request $request, string $id): AnonymousResourceCollection
+    {
+        $transactions = $this->customerService->getCustomerTransactions($id, 15, $request->user());
+
+        return TransactionResource::collection($transactions);
     }
 }

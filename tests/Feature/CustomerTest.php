@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Loan;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -469,6 +470,34 @@ class CustomerTest extends TestCase
 
         $this->assertContains($c1->id, $ids);
         $this->assertNotContains($c2->id, $ids);
+    }
+
+    public function test_can_list_transactions_for_a_customer(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $account = Account::factory()->create(['customer_id' => $customer->id, 'balance' => 5000]);
+        Transaction::factory()->count(3)->create(['account_id' => $account->id]);
+
+        $response = $this->getJson("/api/customers/{$customer->id}/transactions");
+
+        $response->assertStatus(200);
+        $this->assertCount(3, $response->json('data'));
+    }
+
+    public function test_customer_includes_total_balance(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        Account::factory()->create(['customer_id' => $customer->id, 'balance' => 1500]);
+        Account::factory()->create(['customer_id' => $customer->id, 'balance' => 2500]);
+
+        $response = $this->getJson("/api/customers/{$customer->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.total_balance', 4000);
     }
 }
 

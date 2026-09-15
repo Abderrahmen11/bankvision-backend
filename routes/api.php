@@ -101,6 +101,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('customers/{id}',                [CustomerController::class, 'show']);
     Route::get('customers/{id}/accounts',       [CustomerController::class, 'accounts']);
     Route::get('customers/{id}/loans',          [CustomerController::class, 'loans']);
+    Route::get('customers/{id}/transactions',   [CustomerController::class, 'transactions']);
 
     Route::middleware('role:admin,manager,csr')->group(function () {
         Route::post('customers',       [CustomerController::class, 'store']);
