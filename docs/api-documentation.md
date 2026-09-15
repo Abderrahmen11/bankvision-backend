@@ -19,6 +19,16 @@
 9. [Branch Endpoints](#7-branch-endpoints)
 10. [Dashboard Endpoints](#8-dashboard-endpoints)
 
+### Compatibility paths
+
+The canonical analytical report paths are `/api/dashboard/reports` and
+`/api/dashboard/risk-analysis`. The legacy `/api/reports` and
+`/api/reports/risk-analysis` paths remain as compatibility aliases for
+existing external clients and have the same RBAC middleware and response
+contract. The authenticated `/api/search` endpoint is also retained as a
+server-side bridge for external clients; the React SPA uses its local search
+index instead.
+
 ---
 
 ## Authentication & Authorization
@@ -472,6 +482,35 @@ List all loans belonging to a customer.
       "status": "active",
       "start_date": "2026-03-01",
       "next_payment_date": "2026-09-01"
+    }
+  ]
+}
+```
+
+---
+
+### `GET /api/customers/{id}/transactions`
+List recent transactions for all accounts belonging to a customer.
+
+- **Role**: All authenticated roles
+- **Query Parameters**:
+  - `page` (`integer`, optional): Page number (default: 1)
+  - `per_page` (`integer`, optional): Results per page (default: 15)
+
+**Response (`200 OK`):**
+```json
+{
+  "data": [
+    {
+      "id": 101,
+      "reference_number": "TXN-2026-00101",
+      "account_id": 4,
+      "transaction_type": "deposit",
+      "amount": "1200.00",
+      "status": "completed",
+      "channel": "online",
+      "description": "Salary deposit",
+      "transaction_date": "2026-08-20 09:30:00"
     }
   ]
 }
