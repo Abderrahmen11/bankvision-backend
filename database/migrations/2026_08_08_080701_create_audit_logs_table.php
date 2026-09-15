@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('action'); // create, update, delete, view, approve, reject, login, logout
             $table->string('table_name'); // users, customers, accounts, transactions, loans, alerts
-            $table->unsignedBigInteger('record_id');
+            $table->unsignedBigInteger('record_id')->nullable();
             $table->json('old_values')->nullable();
             $table->json('new_values')->nullable();
             $table->string('ip_address')->nullable();
