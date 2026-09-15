@@ -31,6 +31,14 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user',    [AuthController::class, 'user']);
 
+    // In-app notifications (bell icon)
+    Route::get('/notifications',            [NotificationController::class, 'index']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+    Route::post('/notifications/read-all',  [NotificationController::class, 'markAllRead']);
+
+    // Compatibility bridge for external clients; the SPA uses its local index.
+    Route::get('/search', [SearchController::class, 'index']);
+
     /*
     |----------------------------------------------------------------------
     | Dashboard & Analytical Reports
