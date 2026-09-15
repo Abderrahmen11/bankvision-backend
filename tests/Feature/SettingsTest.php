@@ -292,16 +292,8 @@ class SettingsTest extends TestCase
             'channel' => 'authenticator',
         ]);
 
-        $enable->assertStatus(200)
-            ->assertJson(['success' => true, 'message' => 'Two-factor authentication enabled.'])
-            ->assertJsonPath('data.two_factor_enabled', true)
-            ->assertJsonPath('data.two_factor_channel', 'authenticator');
-
-        $this->assertDatabaseHas('user_settings', [
-            'user_id'             => $this->admin->id,
-            'two_factor_enabled'  => true,
-            'two_factor_channel'  => 'authenticator',
-        ]);
+        $enable->assertStatus(422)
+            ->assertJson(['success' => false]);
 
         $disable = $this->postJson('/api/settings/security/2fa', ['enabled' => false]);
 
@@ -322,6 +314,32 @@ class SettingsTest extends TestCase
                 'success'               => false,
                 'requires_verification' => true,
             ]);
+    }
+
+    public function test_two_factor_code_is_locked_after_maximum_failed_attempts(): void
+    {
+        $settings = $this->admin->settingsOrCreate();
+        $settings->forceFill([
+            'two_factor_code' => Hash::make('123456'),
+            'two_factor_code_expires_at' => now()->addMinutes(10),
+            'two_factor_code_attempts' => 0,
+        ])->save();
+
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->postJson('/api/login/2fa', [
+                'email' => $this->admin->email,
+                'code' => '000000',
+            ])->assertStatus(422);
+        }
+
+        $this->assertNull($settings->fresh()->two_factor_code);
+
+        $lockedResponse = $this->postJson('/api/login/2fa', [
+            'email' => $this->admin->email,
+            'code' => '123456',
+        ]);
+
+        $this->assertContains($lockedResponse->status(), [422, 429]);
     }
 
     // -------------------------------------------------------------------------

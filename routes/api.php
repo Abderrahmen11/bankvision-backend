@@ -20,6 +20,13 @@ use Illuminate\Support\Facades\Route;
 */
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
+// Published product interest rates (public marketing data)
+Route::get('/public/interest-rates', [SystemSettingController::class, 'publicInterestRates']);
+
+// Two-factor login challenge (password already verified; no token issued yet)
+Route::post('/login/2fa', [AuthController::class, 'verifyTwoFactorLogin'])->middleware('throttle:login');
+    Route::post('/login/2fa/resend', [AuthController::class, 'resendTwoFactorCode'])->middleware('throttle:login');
+
 /*
 |--------------------------------------------------------------------------
 | Protected Routes — all staff (any authenticated role)
