@@ -9,8 +9,15 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DashboardLayoutController;
 use App\Http\Controllers\Api\LoanController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\SarFilingController;
+use App\Http\Controllers\Api\SecurityController;
+use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\UserSettingController;
+use App\Http\Controllers\Api\SearchController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -62,6 +69,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('/risk-analysis',   [DashboardController::class, 'riskAnalysis']);
 
         // Reports restricted from CSR
+        // Legacy report paths remain as compatibility aliases for existing clients.
         Route::middleware('role:admin,manager,compliance,analyst,auditor')->group(function () {
             Route::get('/reports', [DashboardController::class, 'reports']);
         });
