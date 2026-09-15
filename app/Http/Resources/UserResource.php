@@ -21,6 +21,8 @@ class UserResource extends JsonResource
             'role'          => $this->role,
             'status'        => $this->status,
             'phone'         => $this->phone,
+            'avatar'        => $this->avatar,
+            'avatar_url'    => $this->avatar ? asset('storage/' . $this->avatar) : null,
             'last_login_at' => $this->last_login_at?->format('Y-m-d H:i:s'),
             'branch'        => BranchResource::make($this->whenLoaded('branch')),
             'created_at'    => $this->created_at?->format('Y-m-d H:i:s'),
