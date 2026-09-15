@@ -16,9 +16,10 @@ class StoreAccountRequest extends FormRequest
         return [
             'customer_id'   => ['required', 'exists:customers,id'],
             'account_type'  => ['required', 'in:savings,checking,business'],
-            'currency'      => ['sometimes', 'string', 'size:3'],
-            'balance'       => ['sometimes', 'numeric', 'min:0', 'max:999999999.99'],
-            'interest_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'currency'        => ['sometimes', 'string', 'size:3'],
+            'balance'         => ['sometimes', 'numeric', 'min:0', 'max:999999999.99'],
+            'opening_balance' => ['sometimes', 'numeric', 'min:0', 'max:999999999.99'],
+            'interest_rate'   => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'opened_date'   => ['sometimes', 'date'],
         ];
     }

@@ -16,6 +16,7 @@ class IndexCustomerRequest extends FormRequest
         return [
             'search'         => ['sometimes', 'nullable', 'string', 'max:255'],
             'type'           => ['sometimes', 'nullable', 'string', 'in:premium,regular,business'],
+            'customer_type'  => ['sometimes', 'nullable', 'string', 'in:premium,regular,business'],
             'kyc_status'     => ['sometimes', 'nullable', 'string', 'in:verified,pending,expired'],
             'risk_level'     => ['sometimes', 'nullable', 'string', 'in:low,medium,high'],
             'branch_id'      => ['sometimes', 'nullable', 'integer', 'exists:branches,id'],

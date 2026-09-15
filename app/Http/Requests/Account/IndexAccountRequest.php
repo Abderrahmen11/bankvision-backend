@@ -17,6 +17,7 @@ class IndexAccountRequest extends FormRequest
             'search'         => ['sometimes', 'nullable', 'string', 'max:255'],
             'customer_id'    => ['sometimes', 'nullable', 'integer', 'exists:customers,id'],
             'type'           => ['sometimes', 'nullable', 'string', 'in:savings,checking,business'],
+            'account_type'   => ['sometimes', 'nullable', 'string', 'in:savings,checking,business'],
             'status'         => ['sometimes', 'nullable', 'string', 'in:active,frozen,closed'],
             'currency'       => ['sometimes', 'nullable', 'string', 'size:3'],
             'branch_id'      => ['sometimes', 'nullable', 'integer', 'exists:branches,id'],

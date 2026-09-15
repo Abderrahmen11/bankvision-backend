@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\AuditLog;
 
+use App\Enums\Role;
 use Illuminate\Foundation\Http\FormRequest;
 
 class IndexAuditLogRequest extends FormRequest
@@ -20,7 +21,7 @@ class IndexAuditLogRequest extends FormRequest
             'user_id'        => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
             'record_id'      => ['sometimes', 'nullable', 'integer'],
             'ip_address'     => ['sometimes', 'nullable', 'string', 'max:45'],
-            'role'           => ['sometimes', 'nullable', 'string', 'in:admin,manager,csr,compliance,auditor,analyst'],
+            'role'           => ['sometimes', 'nullable', 'string', 'in:' . implode(',', Role::values())],
             'date_from'      => ['sometimes', 'nullable', 'date'],
             'date_to'        => ['sometimes', 'nullable', 'date', 'after_or_equal:date_from'],
             'sort_by'        => ['sometimes', 'nullable', 'string', 'in:created_at,action,table_name,record_id,ip_address'],

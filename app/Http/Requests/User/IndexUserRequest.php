@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\User;
 
+use App\Enums\Role;
 use Illuminate\Foundation\Http\FormRequest;
 
 class IndexUserRequest extends FormRequest
@@ -15,7 +16,7 @@ class IndexUserRequest extends FormRequest
     {
         return [
             'search'         => ['sometimes', 'nullable', 'string', 'max:255'],
-            'role'           => ['sometimes', 'nullable', 'string', 'in:admin,manager,compliance,analyst,csr,auditor'],
+            'role'           => ['sometimes', 'nullable', 'string', 'in:' . implode(',', Role::values())],
             'status'         => ['sometimes', 'nullable', 'string', 'in:pending,active,suspended'],
             'branch_id'      => ['sometimes', 'nullable', 'integer', 'exists:branches,id'],
             'branch'         => ['sometimes', 'nullable', 'integer', 'exists:branches,id'],
