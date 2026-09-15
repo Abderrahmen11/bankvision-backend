@@ -75,7 +75,7 @@ class AuthTest extends TestCase
         $response->assertStatus(401)
             ->assertJson([
                 'success' => false,
-                'message' => 'Incorrect password.',
+                'message' => 'Invalid email or password.',
             ]);
     }
 
@@ -86,10 +86,10 @@ class AuthTest extends TestCase
             'password' => 'Secret123!',
         ]);
 
-        $response->assertStatus(404)
+        $response->assertStatus(401)
             ->assertJson([
                 'success' => false,
-                'message' => 'No account found with this email address.',
+                'message' => 'Invalid email or password.',
             ]);
     }
 

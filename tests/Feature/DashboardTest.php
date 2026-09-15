@@ -366,10 +366,13 @@ class DashboardTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    'portfolio_summary' => ['total_deposits', 'total_loan_principal', 'total_loan_outstanding', 'loan_to_deposit_ratio'],
-                    'transaction_breakdown' => ['by_type', 'by_channel'],
-                    'loan_performance',
-                    'customer_demographics',
+                    'overview' => ['total_revenue', 'total_expenses', 'net_profit', 'profit_margin', 'transaction_volume', 'total_deposits', 'total_loan_outstanding'],
+                    'income_statement' => ['revenue', 'expenses', 'net_income_before_tax'],
+                    'balance_sheet',
+                    'transaction_analytics' => ['by_type', 'by_channel', 'total_count', 'total_volume'],
+                    'loan_analytics' => ['portfolio_summary', 'status_breakdown'],
+                    'risk_compliance' => ['customer_risk', 'kyc_status', 'aml_alerts'],
+                    'branch_performance',
                 ],
             ]);
     }

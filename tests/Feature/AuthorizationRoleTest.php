@@ -205,6 +205,24 @@ class AuthorizationRoleTest extends TestCase
         $this->getJson("/api/accounts/{$otherAccount->id}")->assertStatus(403);
     }
 
+    public function test_branch_scoped_users_without_a_branch_are_denied(): void
+    {
+        $branchlessManager = User::factory()->create([
+            'role' => 'manager',
+            'status' => 'active',
+            'branch_id' => null,
+        ]);
+
+        Sanctum::actingAs($branchlessManager);
+
+        $this->getJson('/api/customers')->assertStatus(403);
+        $this->getJson('/api/accounts')->assertStatus(403);
+        $this->getJson('/api/transactions')->assertStatus(403);
+        $this->getJson('/api/loans')->assertStatus(403);
+        $this->getJson('/api/alerts')->assertStatus(403);
+        $this->getJson('/api/users')->assertStatus(403);
+    }
+
     public function test_all_authenticated_roles_can_read_dashboard_stats(): void
     {
         $roles = [$this->admin, $this->manager, $this->compliance, $this->analyst, $this->csr, $this->auditor];

@@ -161,7 +161,7 @@ class ComprehensiveBackendAuditTest extends TestCase
         ]);
 
         $validResponse->assertStatus(201)
-            ->assertJsonPath('data.balance', 1000.50);
+            ->assertJsonPath('data.balance', '1000.50');
     }
 
     /*
@@ -381,7 +381,7 @@ class ComprehensiveBackendAuditTest extends TestCase
         // Unauthenticated or not, security headers middleware attaches them to API responses
         $response->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'DENY')
-            ->assertHeader('X-XSS-Protection', '1; mode=block')
+            ->assertHeader('Content-Security-Policy')
             ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     }
 

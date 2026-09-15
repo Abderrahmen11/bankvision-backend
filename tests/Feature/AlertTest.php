@@ -242,6 +242,31 @@ class AlertTest extends TestCase
             ->assertJsonValidationErrors(['user_id']);
     }
 
+    public function test_manager_cannot_assign_alert_to_inactive_or_cross_branch_staff(): void
+    {
+        Sanctum::actingAs($this->manager);
+        $customer = \App\Models\Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $alert = Alert::factory()->create([
+            'alertable_type' => \App\Models\Customer::class,
+            'alertable_id' => $customer->id,
+            'status' => 'open',
+        ]);
+        $otherBranch = Branch::factory()->create(['status' => 'active']);
+        $otherStaff = User::factory()->create([
+            'role' => 'manager',
+            'status' => 'active',
+            'branch_id' => $otherBranch->id,
+        ]);
+        $inactiveStaff = User::factory()->create([
+            'role' => 'csr',
+            'status' => 'suspended',
+            'branch_id' => $this->branch->id,
+        ]);
+
+        $this->postJson("/api/alerts/{$alert->id}/assign", ['user_id' => $otherStaff->id])->assertStatus(403);
+        $this->postJson("/api/alerts/{$alert->id}/assign", ['user_id' => $inactiveStaff->id])->assertStatus(403);
+    }
+
     public function test_assigning_already_in_progress_alert_preserves_status(): void
     {
         Sanctum::actingAs($this->compliance);
