@@ -166,6 +166,19 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     /*
     |----------------------------------------------------------------------
+    | SAR Filings — readable by AML dashboard roles; filed by compliance staff
+    |----------------------------------------------------------------------
+    */
+    Route::middleware('role:admin,manager,compliance,analyst,auditor')->group(function () {
+        Route::get('sar-filings', [SarFilingController::class, 'index']);
+    });
+
+    Route::middleware('role:admin,manager,compliance')->group(function () {
+        Route::post('sar-filings', [SarFilingController::class, 'store']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
     | Users — CSR cannot view staff list; admin manages
     |----------------------------------------------------------------------
     */
