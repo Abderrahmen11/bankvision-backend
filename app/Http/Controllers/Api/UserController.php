@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\User\EligibleRelationshipManagersRequest;
 use App\Http\Requests\User\IndexUserRequest;
 use App\Http\Requests\User\StoreUserRequest;
 use App\Http\Requests\User\UpdateUserRequest;
@@ -11,6 +12,7 @@ use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class UserController extends Controller
 {
@@ -29,6 +31,29 @@ class UserController extends Controller
         );
 
         return UserResource::collection($users);
+    }
+
+    /**
+     * Return active CSR / Manager users for a given branch (for RM assignment).
+     * Admin: any branch. Manager & CSR: own branch only.
+     */
+    public function eligibleRelationshipManagers(EligibleRelationshipManagersRequest $request): JsonResponse
+    {
+        $branchId       = (int) $request->validated()['branch_id'];
+        $requestingUser = $request->user();
+
+        // Branch-scoped roles may only query their own branch
+        $branchScopedRoles = ['manager', 'csr'];
+        if (
+            in_array($requestingUser->role, $branchScopedRoles, true)
+            && (int) $requestingUser->branch_id !== $branchId
+        ) {
+            throw new AccessDeniedHttpException('You may only query eligible managers for your own branch.');
+        }
+
+        $managers = $this->userService->getEligibleRelationshipManagers($branchId);
+
+        return response()->json(['data' => $managers]);
     }
 
     /**

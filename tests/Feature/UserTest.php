@@ -300,4 +300,77 @@ class UserTest extends TestCase
 
         $this->deleteJson("/api/users/{$user->id}")->assertStatus(403);
     }
+
+    // ─── Eligible Relationship Managers ───────────────────────────────────────────
+
+    public function test_admin_can_get_eligible_managers_for_any_branch(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $other = Branch::factory()->create(['status' => 'active']);
+        User::factory()->create(['role' => 'csr',     'status' => 'active',    'branch_id' => $other->id]);
+        User::factory()->create(['role' => 'manager', 'status' => 'active',    'branch_id' => $other->id]);
+        User::factory()->create(['role' => 'analyst', 'status' => 'active',    'branch_id' => $other->id]);
+        User::factory()->create(['role' => 'csr',     'status' => 'suspended', 'branch_id' => $other->id]);
+
+        $response = $this->getJson('/api/users/eligible-relationship-managers?branch_id=' . $other->id);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+
+        // Only active csr + manager returned
+        $this->assertCount(2, $data);
+        foreach ($data as $m) {
+            $this->assertContains($m['role'], ['csr', 'manager']);
+            $this->assertArrayHasKey('id',    $m);
+            $this->assertArrayHasKey('name',  $m);
+            $this->assertArrayHasKey('email', $m);
+        }
+    }
+
+    public function test_manager_can_only_get_eligible_managers_for_own_branch(): void
+    {
+        Sanctum::actingAs($this->manager);
+
+        // Own branch — should succeed
+        $response = $this->getJson('/api/users/eligible-relationship-managers?branch_id=' . $this->branch->id);
+        $response->assertStatus(200);
+
+        // Foreign branch — should be forbidden
+        $foreign = Branch::factory()->create(['status' => 'active']);
+        $this->getJson('/api/users/eligible-relationship-managers?branch_id=' . $foreign->id)
+            ->assertStatus(403);
+    }
+
+    public function test_csr_can_only_get_eligible_managers_for_own_branch(): void
+    {
+        Sanctum::actingAs($this->csr);
+
+        $response = $this->getJson('/api/users/eligible-relationship-managers?branch_id=' . $this->branch->id);
+        $response->assertStatus(200);
+
+        $foreign = Branch::factory()->create(['status' => 'active']);
+        $this->getJson('/api/users/eligible-relationship-managers?branch_id=' . $foreign->id)
+            ->assertStatus(403);
+    }
+
+    public function test_analyst_cannot_access_eligible_managers_endpoint(): void
+    {
+        $analyst = User::factory()->create(['role' => 'analyst', 'status' => 'active', 'branch_id' => $this->branch->id]);
+        Sanctum::actingAs($analyst);
+
+        $this->getJson('/api/users/eligible-relationship-managers?branch_id=' . $this->branch->id)
+            ->assertStatus(403);
+    }
+
+    public function test_eligible_managers_requires_valid_branch_id(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $this->getJson('/api/users/eligible-relationship-managers?branch_id=99999')
+            ->assertStatus(422);
+
+        $this->getJson('/api/users/eligible-relationship-managers')
+            ->assertStatus(422);
+    }
 }

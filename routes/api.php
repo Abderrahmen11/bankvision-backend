@@ -211,6 +211,12 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('users/{id}',    [UserController::class, 'show']);
     });
 
+    // Eligible relationship-manager lookup — admin can query any branch;
+    // manager and csr are restricted to their own branch in the controller.
+    Route::middleware('role:admin,manager,csr')->group(function () {
+        Route::get('users/eligible-relationship-managers', [UserController::class, 'eligibleRelationshipManagers']);
+    });
+
     Route::middleware('role:admin')->group(function () {
         Route::post('users',        [UserController::class, 'store']);
         Route::put('users/{id}',    [UserController::class, 'update']);

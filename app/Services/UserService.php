@@ -105,6 +105,25 @@ class UserService
     }
 
     /**
+     * Return users eligible to be assigned as relationship managers for a branch.
+     *
+     * Eligible means: role in [csr, manager], status = active, branch_id = $branchId.
+     * The $requestingUser guard is applied upstream (route middleware), so by the time
+     * this method runs the caller is already allowed to query this branch.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, User>
+     */
+    public function getEligibleRelationshipManagers(int $branchId): \Illuminate\Database\Eloquent\Collection
+    {
+        return User::query()
+            ->where('branch_id', $branchId)
+            ->whereIn('role', [Role::Manager->value, Role::Csr->value])
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'role']);
+    }
+
+    /**
      * Delete a user record, preventing deleting own account.
      */
     public function deleteUser(User|string|int $user, ?User $authenticatedUser = null): bool
