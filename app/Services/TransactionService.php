@@ -249,12 +249,19 @@ class TransactionService
     public function flagTransaction(Transaction|string|int $transaction, ?User $user = null): Transaction
     {
         $user = $user ?? auth()->user();
-        if ($user) BranchScope::ensure($user);
+        if ($user)
+            BranchScope::ensure($user);
 
         $flagged = DB::transaction(function () use ($transaction, $user) {
             $transaction = $transaction instanceof Transaction
                 ? $transaction
-                : Transaction::with('account.customer')->where('status', 'completed')->findOrFail($transaction);
+                : Transaction::with('account.customer')->findOrFail($transaction);
+
+            if (!in_array($transaction->status, ['pending', 'completed'], true)) {
+                throw ValidationException::withMessages([
+                    'status' => 'Only pending or completed transactions can be flagged.',
+                ]);
+            }
 
             if ($user && $user->role === Role::Manager->value && $user->branch_id) {
                 if ((int) $transaction->account?->customer?->branch_id !== (int) $user->branch_id) {

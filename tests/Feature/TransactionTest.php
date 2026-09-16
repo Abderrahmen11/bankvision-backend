@@ -614,4 +614,52 @@ class TransactionTest extends TestCase
 
         $this->postJson("/api/transactions/{$txn->id}/flag")->assertStatus(403);
     }
+
+    public function test_compliance_can_flag_a_pending_transaction(): void
+    {
+        Sanctum::actingAs($this->compliance);
+        $txn = Transaction::factory()->create([
+            'account_id' => $this->account->id,
+            'status'     => 'pending',
+        ]);
+
+        $response = $this->postJson("/api/transactions/{$txn->id}/flag");
+
+        $response->assertStatus(200)
+            ->assertJson(['success' => true, 'message' => 'Transaction flagged for review.'])
+            ->assertJsonPath('data.status', 'flagged');
+
+        $this->assertDatabaseHas('alerts', [
+            'alertable_type' => Transaction::class,
+            'alertable_id'   => $txn->id,
+            'severity'       => 'high',
+            'status'         => 'open',
+        ]);
+    }
+
+    public function test_flagging_a_failed_transaction_returns_422(): void
+    {
+        Sanctum::actingAs($this->compliance);
+        $txn = Transaction::factory()->create([
+            'account_id' => $this->account->id,
+            'status'     => 'failed',
+        ]);
+
+        $this->postJson("/api/transactions/{$txn->id}/flag")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+    }
+
+    public function test_flagging_an_already_flagged_transaction_returns_422(): void
+    {
+        Sanctum::actingAs($this->compliance);
+        $txn = Transaction::factory()->create([
+            'account_id' => $this->account->id,
+            'status'     => 'flagged',
+        ]);
+
+        $this->postJson("/api/transactions/{$txn->id}/flag")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+    }
 }
