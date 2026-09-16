@@ -63,15 +63,16 @@ class AlertFactory extends Factory
             ]),
         };
 
-        // Map alert_type directly to appropriate polymorphic target entity
+        // Map alert_type to appropriate polymorphic target entity
         $targetMap = [
-            'suspicious_transaction' => [Transaction::class, fn() => Transaction::inRandomOrder()->first()?->id ?? Transaction::factory()],
-            'kyc_expiring'           => [Customer::class,    fn() => Customer::inRandomOrder()->first()?->id ?? Customer::factory()],
-            'login_attempt'          => [Customer::class,    fn() => Customer::inRandomOrder()->first()?->id ?? Customer::factory()],
-            'loan_delinquent'        => [Loan::class,        fn() => Loan::inRandomOrder()->first()?->id ?? Loan::factory()],
+            'suspicious_transaction' => [Transaction::class, fn () => Transaction::inRandomOrder()->first()?->id ?? Transaction::factory()],
+            'kyc_expiring'           => [Customer::class,    fn () => Customer::inRandomOrder()->first()?->id ?? Customer::factory()],
+            'login_attempt'          => [Customer::class,    fn () => Customer::inRandomOrder()->first()?->id ?? Customer::factory()],
+            'loan_delinquent'        => [Loan::class,        fn () => Loan::inRandomOrder()->first()?->id ?? Loan::factory()],
         ];
 
-        $target = $targetMap[$type];
+        $target      = $targetMap[$type];
+        $alertableId = call_user_func($target[1]);
 
         $status = $this->faker->randomElement([
             'open', 'open', 'open',  // 3/5 open (most alerts unresolved)
@@ -93,9 +94,51 @@ class AlertFactory extends Factory
             'description'    => $description,
             'resolved_at'    => $resolvedAt,
             'status'         => $status,
-            'assigned_to'    => User::inRandomOrder()->first()?->id,
             'alertable_type' => $target[0],
-            'alertable_id'   => call_user_func($target[1]),
+            'alertable_id'   => $alertableId,
+            'assigned_to'    => function (array $attributes) {
+                // 30% chance unassigned
+                if (fake()->boolean(30)) {
+                    return null;
+                }
+
+                $morphClass = $attributes['alertable_type'] ?? null;
+                $entityId   = $attributes['alertable_id'] ?? null;
+
+                $entityBranchId = $this->resolveEntityBranchId($morphClass, $entityId);
+                if (!$entityBranchId) {
+                    return null;
+                }
+
+                return User::where('branch_id', $entityBranchId)
+                    ->where('status', 'active')
+                    ->whereNotIn('role', ['admin'])
+                    ->inRandomOrder()
+                    ->value('id');
+            },
         ];
+    }
+
+    /**
+     * Derive the branch_id of the entity this alert is about.
+     * Returns null if the entity doesn't exist yet (factory-created inline).
+     */
+    private function resolveEntityBranchId(?string $morphClass, mixed $id): ?int
+    {
+        if ($id instanceof \Illuminate\Database\Eloquent\Model) {
+            $id = $id->id;
+        }
+
+        if (!$morphClass || (!is_int($id) && !is_string($id))) {
+            return null; // factory instance, not yet persisted
+        }
+
+        return match ($morphClass) {
+            Customer::class    => Customer::find($id)?->branch_id,
+            Account::class     => Account::with('customer')->find($id)?->customer?->branch_id,
+            Transaction::class => Transaction::with('account.customer')->find($id)?->account?->customer?->branch_id,
+            Loan::class        => Loan::with('customer')->find($id)?->customer?->branch_id,
+            default            => null,
+        };
     }
 }

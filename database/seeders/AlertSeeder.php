@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Alert;
 use App\Models\Customer;
 use App\Models\Transaction;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class AlertSeeder extends Seeder
@@ -28,6 +29,16 @@ class AlertSeeder extends Seeder
         }
 
         foreach ($flaggedTransactions as $transaction) {
+            $branchId = $transaction->account?->customer?->branch_id;
+            $assigneeId = null;
+            if ($branchId && fake()->boolean(70)) {
+                $assigneeId = User::where('branch_id', $branchId)
+                    ->where('status', 'active')
+                    ->whereNotIn('role', ['admin'])
+                    ->inRandomOrder()
+                    ->value('id');
+            }
+
             Alert::factory()->create([
                 'alert_type'     => 'suspicious_transaction',
                 'severity'       => 'high',
@@ -36,6 +47,7 @@ class AlertSeeder extends Seeder
                 'resolved_at'    => null,
                 'alertable_type' => Transaction::class,
                 'alertable_id'   => $transaction->id,
+                'assigned_to'    => $assigneeId,
             ]);
         }
 
@@ -51,6 +63,16 @@ class AlertSeeder extends Seeder
             ->inRandomOrder()->take(5)->get();
 
         foreach ($customers as $customer) {
+            $branchId = $customer->branch_id;
+            $assigneeId = null;
+            if ($branchId && fake()->boolean(70)) {
+                $assigneeId = User::where('branch_id', $branchId)
+                    ->where('status', 'active')
+                    ->whereNotIn('role', ['admin'])
+                    ->inRandomOrder()
+                    ->value('id');
+            }
+
             Alert::factory()->create([
                 'alert_type'     => 'kyc_expiring',
                 'severity'       => 'medium',
@@ -58,6 +80,7 @@ class AlertSeeder extends Seeder
                 'description'    => 'Customer KYC status requires renewal or verification.',
                 'alertable_type' => Customer::class,
                 'alertable_id'   => $customer->id,
+                'assigned_to'    => $assigneeId,
             ]);
         }
     }
