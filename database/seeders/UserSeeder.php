@@ -10,9 +10,10 @@ use Illuminate\Support\Facades\Hash;
 class UserSeeder extends Seeder
 {
     /**
-     * Total random staff users to generate (excluding the 6 guaranteed personas).
+     * Random non-manager staff to generate (excluding the 6 guaranteed personas
+     * and the exactly-one-manager-per-branch accounts).
      */
-    private const RANDOM_STAFF_COUNT = 40;
+    private const RANDOM_STAFF_COUNT = 35;
 
     /**
      * The six guaranteed persona accounts — one per role, always ACTIVE.
@@ -53,7 +54,8 @@ class UserSeeder extends Seeder
 
     public function run(): void
     {
-        $firstBranchId = Branch::orderBy('id')->value('id');
+        $branches    = Branch::orderBy('id')->get();
+        $firstBranch = $branches->first();
 
         // -----------------------------------------------------------------------
         // 1. Upsert the six guaranteed persona accounts (always active).
@@ -68,50 +70,107 @@ class UserSeeder extends Seeder
                     'status'            => 'active',
                     'password'          => Hash::make('password'),
                     'email_verified_at' => now(),
-                    'branch_id'         => $firstBranchId,
+                    'branch_id'         => $firstBranch?->id,
                     'phone'             => fake()->phoneNumber(),
                 ]
             );
         }
 
         // -----------------------------------------------------------------------
-        // 2. Enforce single-admin rule: delete any admin rows that are NOT the
-        //    guaranteed persona (defensive guard against previous bad seeds).
+        // 2. Enforce single-admin rule.
         // -----------------------------------------------------------------------
         User::where('role', 'admin')
             ->where('email', '!=', 'admin@bankvision.com')
             ->delete();
 
         // -----------------------------------------------------------------------
-        // 3. Generate random staff with weighted role + status distribution.
-        //    The factory never produces admin users, so this is safe.
+        // 3. Ensure EXACTLY ONE active manager per branch.
+        //    - Promote the persona manager to the first branch (already done above).
+        //    - For every other branch, find an existing active manager already
+        //      assigned there. If none exists, create one. Suspend/demote any
+        //      extra managers in that branch to prevent duplicates.
+        // -----------------------------------------------------------------------
+        foreach ($branches as $branch) {
+            $branchManagers = User::where('role', 'manager')
+                ->where('branch_id', $branch->id)
+                ->where('email', '!=', 'manager@bankvision.com') // persona handled separately
+                ->get();
+
+            // Is the persona manager assigned to this branch?
+            $personaManagerHere = ($branch->id === $firstBranch?->id);
+
+            if ($personaManagerHere) {
+                // First branch already has the persona manager — demote/suspend extras.
+                $branchManagers->each(function (User $u) {
+                    // Extra managers in first branch: make them CSR instead
+                    $u->update(['role' => 'csr']);
+                });
+                // Point branch at persona manager
+                $personaManager = User::where('email', 'manager@bankvision.com')->first();
+                if ($personaManager) {
+                    $branch->update(['manager_id' => $personaManager->id]);
+                }
+                continue;
+            }
+
+            if ($branchManagers->count() >= 1) {
+                // Keep the first one active, convert the rest to csr
+                $keeper = $branchManagers->first();
+                $keeper->update(['status' => 'active']);
+                $branchManagers->skip(1)->each(fn (User $u) => $u->update(['role' => 'csr']));
+                $branch->update(['manager_id' => $keeper->id]);
+            } else {
+                // No manager yet — create exactly one
+                $newManager = User::factory()->manager()->active()->create([
+                    'branch_id' => $branch->id,
+                ]);
+                $branch->update(['manager_id' => $newManager->id]);
+            }
+        }
+
+        // -----------------------------------------------------------------------
+        // 4. Generate random non-manager staff (csr, compliance, analyst, auditor).
+        //    The factory now uses 90/5/5 active/suspended/pending weights.
         // -----------------------------------------------------------------------
         User::factory()
             ->count(self::RANDOM_STAFF_COUNT)
+            ->state(['role' => fake()->randomElement(['csr', 'compliance', 'analyst', 'auditor'])])
             ->create();
 
         // -----------------------------------------------------------------------
-        // 4. Ensure at least one active manager per branch for FK constraints.
-        //    Link each branch to a manager (or create one if none exist yet).
+        // 5. Hard cap: ensure total suspended users ≤ 5% of total staff (max 1-2 bank-wide).
+        //    Convert any excess suspended users to active (oldest first).
+        //    Managers are NEVER suspended — always active.
         // -----------------------------------------------------------------------
-        $branches = Branch::all();
-        $managers = User::where('role', 'manager')->where('status', 'active')->get();
+        User::where('role', 'manager')->where('status', '!=', 'active')->update(['status' => 'active']);
 
-        if ($managers->isEmpty()) {
-            $managers = User::factory()
-                ->manager()
-                ->active()
-                ->count($branches->count())
-                ->create();
+        $totalUsers     = User::count();
+        $maxSuspended   = min(2, (int) floor($totalUsers * 0.05));
+        $suspendedUsers = User::where('status', 'suspended')
+            ->where('role', '!=', 'admin')
+            ->where('role', '!=', 'manager')
+            ->orderBy('id')
+            ->get();
+
+        if ($suspendedUsers->count() > $maxSuspended) {
+            $suspendedUsers->skip($maxSuspended)->each(fn (User $u) => $u->update(['status' => 'active']));
         }
 
+        // -----------------------------------------------------------------------
+        // 6. Safety net: no branch should be left without an active manager.
+        // -----------------------------------------------------------------------
         foreach ($branches as $branch) {
-            // Prefer a manager already in that branch; otherwise pick any active manager
-            $manager = $managers->firstWhere('branch_id', $branch->id)
-                ?? $managers->random();
+            $hasActiveManager = User::where('branch_id', $branch->id)
+                ->where('role', 'manager')
+                ->where('status', 'active')
+                ->exists();
 
-            $manager->update(['branch_id' => $branch->id]);
-            $branch->update(['manager_id'  => $manager->id]);
+            if (!$hasActiveManager) {
+                $rescue = User::factory()->manager()->active()->create([
+                    'branch_id' => $branch->id,
+                ]);
+                $branch->update(['manager_id' => $rescue->id]);
+            }
         }
     }
 }

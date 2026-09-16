@@ -32,12 +32,14 @@ class UserFactory extends Factory
 
     /**
      * Status distribution weights.
-     * active 70% | suspended 20% | pending 10%
+     * active 90% | suspended 5% | pending 5%
+     * Suspended is intentionally rare — a suspended branch manager would leave
+     * a branch without leadership, which the UserSeeder explicitly prevents.
      */
     private const STATUS_WEIGHTS = [
-        'active'    => 70,
-        'suspended' => 20,
-        'pending'   => 10,
+        'active'    => 90,
+        'suspended' => 5,
+        'pending'   => 5,
     ];
 
     /**
