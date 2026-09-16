@@ -385,6 +385,116 @@ class CustomerTest extends TestCase
         ])->assertStatus(200);
     }
 
+    public function test_customer_creation_rejects_relationship_manager_from_different_branch(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $otherBranch = Branch::factory()->create();
+        $otherManager = User::factory()->create(['branch_id' => $otherBranch->id, 'role' => 'manager', 'status' => 'active']);
+
+        $response = $this->postJson('/api/customers', [
+            'full_name'               => 'Test Cross RM',
+            'email'                   => 'cross.rm@example.com',
+            'phone'                   => '555-1234',
+            'customer_type'           => 'regular',
+            'branch_id'               => $this->branch->id,
+            'relationship_manager_id' => $otherManager->id,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['relationship_manager_id']);
+    }
+
+    public function test_customer_creation_accepts_relationship_manager_from_same_branch(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $sameBranchManager = User::factory()->create(['branch_id' => $this->branch->id, 'role' => 'manager', 'status' => 'active']);
+
+        $response = $this->postJson('/api/customers', [
+            'full_name'               => 'Test Same Branch RM',
+            'email'                   => 'same.branch.rm@example.com',
+            'phone'                   => '555-5678',
+            'customer_type'           => 'regular',
+            'branch_id'               => $this->branch->id,
+            'relationship_manager_id' => $sameBranchManager->id,
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.relationship_manager.id', $sameBranchManager->id);
+    }
+
+    public function test_customer_update_rejects_relationship_manager_from_different_branch(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $otherBranch = Branch::factory()->create();
+        $otherManager = User::factory()->create(['branch_id' => $otherBranch->id, 'role' => 'manager', 'status' => 'active']);
+
+        $response = $this->putJson("/api/customers/{$customer->id}", [
+            'relationship_manager_id' => $otherManager->id,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['relationship_manager_id']);
+    }
+
+    public function test_customer_update_accepts_relationship_manager_from_same_branch(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $customer = Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $sameBranchManager = User::factory()->create(['branch_id' => $this->branch->id, 'role' => 'manager', 'status' => 'active']);
+
+        $response = $this->putJson("/api/customers/{$customer->id}", [
+            'relationship_manager_id' => $sameBranchManager->id,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.relationship_manager.id', $sameBranchManager->id);
+    }
+
+    public function test_customer_rejects_inactive_relationship_manager(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $inactiveUser = User::factory()->create([
+            'branch_id' => $this->branch->id,
+            'role'      => 'manager',
+            'status'    => 'suspended',
+        ]);
+
+        $response = $this->postJson('/api/customers', [
+            'full_name'               => 'Test Inactive RM',
+            'email'                   => 'inactive.rm@example.com',
+            'phone'                   => '555-4321',
+            'customer_type'           => 'regular',
+            'branch_id'               => $this->branch->id,
+            'relationship_manager_id' => $inactiveUser->id,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['relationship_manager_id']);
+    }
+
+    public function test_customer_rejects_relationship_manager_with_non_eligible_role(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $auditorUser = User::factory()->create([
+            'branch_id' => $this->branch->id,
+            'role'      => 'auditor',
+            'status'    => 'active',
+        ]);
+
+        $response = $this->postJson('/api/customers', [
+            'full_name'               => 'Test Non Eligible RM',
+            'email'                   => 'non.eligible.rm@example.com',
+            'phone'                   => '555-8765',
+            'customer_type'           => 'regular',
+            'branch_id'               => $this->branch->id,
+            'relationship_manager_id' => $auditorUser->id,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['relationship_manager_id']);
+    }
+
     // ─── Destroy ─────────────────────────────────────────────────────────────────
 
     public function test_admin_can_delete_customer_with_no_funds_or_loans(): void

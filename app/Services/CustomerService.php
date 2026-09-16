@@ -84,6 +84,11 @@ class CustomerService
             $data['branch_id'] = $user->branch_id;
         }
 
+        if (array_key_exists('relationship_manager_id', $data) && $data['relationship_manager_id'] !== null) {
+            $effectiveBranchId = (int) ($data['branch_id'] ?? 0);
+            $this->validateRelationshipManager($data['relationship_manager_id'], $effectiveBranchId);
+        }
+
         $data['customer_number']   = 'CUST-' . date('Y') . '-' . Str::upper((string) Str::ulid());
         $data['registration_date'] = $data['registration_date'] ?? now()->toDateString();
         $data['kyc_status']        = $data['kyc_status'] ?? 'pending';
@@ -129,10 +134,51 @@ class CustomerService
             }
         }
 
+        if (array_key_exists('relationship_manager_id', $data) && $data['relationship_manager_id'] !== null) {
+            $effectiveBranchId = (int) ($data['branch_id'] ?? $customer->branch_id);
+            $this->validateRelationshipManager($data['relationship_manager_id'], $effectiveBranchId);
+        } elseif (isset($data['branch_id']) && $customer->relationship_manager_id) {
+            $this->validateRelationshipManager($customer->relationship_manager_id, (int) $data['branch_id']);
+        }
+
         $customer->update($data);
         $customer = $customer->fresh(['branch', 'relationshipManager']);
         DashboardCache::flushReports();
         return $customer;
+    }
+
+    /**
+     * Validate that the relationship manager is eligible for the customer's branch.
+     *
+     * @throws ValidationException
+     */
+    private function validateRelationshipManager(mixed $managerId, int $customerBranchId): void
+    {
+        $manager = User::find($managerId);
+
+        if (!$manager) {
+            throw ValidationException::withMessages([
+                'relationship_manager_id' => ['The selected relationship manager does not exist.'],
+            ]);
+        }
+
+        if ((int) $manager->branch_id !== (int) $customerBranchId) {
+            throw ValidationException::withMessages([
+                'relationship_manager_id' => ['The relationship manager must belong to the same branch as the customer.'],
+            ]);
+        }
+
+        if (!in_array($manager->role, ['csr', 'manager'], true)) {
+            throw ValidationException::withMessages([
+                'relationship_manager_id' => ['The relationship manager must have an eligible role (manager or csr).'],
+            ]);
+        }
+
+        if ($manager->status !== 'active') {
+            throw ValidationException::withMessages([
+                'relationship_manager_id' => ['The relationship manager must be an active staff member.'],
+            ]);
+        }
     }
 
     /**
