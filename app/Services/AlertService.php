@@ -58,12 +58,10 @@ class AlertService
                 });
             });
         } elseif ($user && $user->role === Role::Manager->value && $user->branch_id) {
-            // Manager only see alerts originating from or assigned to their branch
+            // Manager only see alerts originating from their branch
             $branchId = $user->branch_id;
-            $query->where(function ($q) use ($branchId, $user) {
-                $q->where('assigned_to', $user->id)
-                  ->orWhereHas('assignedTo', fn ($uq) => $uq->where('branch_id', $branchId))
-                  ->orWhere(function ($mQ) use ($branchId) {
+            $query->where(function ($q) use ($branchId) {
+                $q->where(function ($mQ) use ($branchId) {
                       $mQ->where('alertable_type', Customer::class)
                          ->whereHasMorph('alertable', [Customer::class], fn ($cq) => $cq->where('branch_id', $branchId));
                   })
@@ -78,6 +76,10 @@ class AlertService
                   ->orWhere(function ($mQ) use ($branchId) {
                       $mQ->where('alertable_type', Loan::class)
                          ->whereHasMorph('alertable', [Loan::class], fn ($lq) => $lq->whereHas('customer', fn ($cq) => $cq->where('branch_id', $branchId)));
+                  })
+                  ->orWhere(function ($mQ) use ($branchId) {
+                      $mQ->whereNull('alertable_type')
+                         ->whereHas('assignedTo', fn ($uq) => $uq->where('branch_id', $branchId));
                   });
             });
         }
@@ -156,6 +158,14 @@ class AlertService
     }
 
     /**
+     * Alias for assignAlert to support assign() calls.
+     */
+    public function assign(Alert|string|int $alert, int $userId, ?User $user = null): Alert
+    {
+        return $this->assignAlert($alert, $userId, $user);
+    }
+
+    /**
      * Assign an alert to a staff member and mark it as in-progress.
      */
     public function assignAlert(Alert|string|int $alert, int $userId, ?User $user = null): Alert
@@ -176,6 +186,14 @@ class AlertService
         }
         if ($user && $user->role === Role::Manager->value && (int) $assignee->branch_id !== (int) $user->branch_id) {
             throw new AccessDeniedHttpException('Access forbidden. Cannot assign an alert outside your assigned branch.');
+        }
+
+        $entityBranchId = $this->getEntityBranchId($alert);
+        if ($assignee->role === Role::Manager->value && $entityBranchId && (int) $assignee->branch_id !== (int) $entityBranchId) {
+            throw new AccessDeniedHttpException('Access forbidden. Cannot assign a manager from a different branch.');
+        }
+        if ($user && in_array($user->role, Role::branchScoped(), true) && $entityBranchId && (int) $assignee->branch_id !== (int) $entityBranchId) {
+            throw new AccessDeniedHttpException('Access forbidden. Cannot assign staff from a different branch.');
         }
 
         $alert->update([
@@ -230,26 +248,39 @@ class AlertService
     }
 
     /**
+     * Derive the branch_id of the entity this alert is about.
+     */
+    public function getEntityBranchId(Alert $alert): ?int
+    {
+        $alertable = $alert->alertable;
+        if ($alertable instanceof Customer) {
+            return (int) $alertable->branch_id;
+        }
+        if ($alertable instanceof Account) {
+            return (int) $alertable->customer?->branch_id;
+        }
+        if ($alertable instanceof Transaction) {
+            return (int) $alertable->account?->customer?->branch_id;
+        }
+        if ($alertable instanceof Loan) {
+            return (int) $alertable->customer?->branch_id;
+        }
+
+        return null;
+    }
+
+    /**
      * Check if alert is associated with a given branch.
      */
     private function alertBelongsToBranch(Alert $alert, int $branchId): bool
     {
-        if ($alert->assignedTo && (int) $alert->assignedTo->branch_id === $branchId) {
-            return true;
+        $entityBranch = $this->getEntityBranchId($alert);
+        if ($entityBranch !== null) {
+            return $entityBranch === $branchId;
         }
 
-        $alertable = $alert->alertable;
-        if ($alertable instanceof Customer) {
-            return (int) $alertable->branch_id === $branchId;
-        }
-        if ($alertable instanceof Account) {
-            return (int) $alertable->customer?->branch_id === $branchId;
-        }
-        if ($alertable instanceof Transaction) {
-            return (int) $alertable->account?->customer?->branch_id === $branchId;
-        }
-        if ($alertable instanceof Loan) {
-            return (int) $alertable->customer?->branch_id === $branchId;
+        if ($alert->assignedTo && (int) $alert->assignedTo->branch_id === $branchId) {
+            return true;
         }
 
         return false;

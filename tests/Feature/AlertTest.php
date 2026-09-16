@@ -267,6 +267,26 @@ class AlertTest extends TestCase
         $this->postJson("/api/alerts/{$alert->id}/assign", ['user_id' => $inactiveStaff->id])->assertStatus(403);
     }
 
+    public function test_cannot_assign_manager_from_different_branch_than_alert_entity(): void
+    {
+        Sanctum::actingAs($this->compliance);
+        $customer = \App\Models\Customer::factory()->create(['branch_id' => $this->branch->id]);
+        $alert = Alert::factory()->create([
+            'alertable_type' => \App\Models\Customer::class,
+            'alertable_id'   => $customer->id,
+            'status'         => 'open',
+        ]);
+        $otherBranch = Branch::factory()->create(['status' => 'active']);
+        $otherManager = User::factory()->create([
+            'role'      => 'manager',
+            'status'    => 'active',
+            'branch_id' => $otherBranch->id,
+        ]);
+
+        $this->postJson("/api/alerts/{$alert->id}/assign", ['user_id' => $otherManager->id])
+            ->assertStatus(403);
+    }
+
     public function test_assigning_already_in_progress_alert_preserves_status(): void
     {
         Sanctum::actingAs($this->compliance);
