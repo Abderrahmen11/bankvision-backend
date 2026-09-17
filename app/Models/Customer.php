@@ -74,6 +74,14 @@ class Customer extends Model
     }
 
     /**
+     * Get all KYC documents uploaded for this customer.
+     */
+    public function kycDocuments(): HasMany
+    {
+        return $this->hasMany(KycDocument::class);
+    }
+
+    /**
      * Scope query to search by name, email, phone, or customer number.
      */
     public function scopeSearch(Builder $query, ?string $search): Builder

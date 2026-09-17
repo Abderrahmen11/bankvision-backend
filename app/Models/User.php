@@ -106,6 +106,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get KYC documents uploaded by this user.
+     */
+    public function uploadedKycDocuments(): HasMany
+    {
+        return $this->hasMany(KycDocument::class, 'uploaded_by');
+    }
+
+    /**
      * Lazily resolve (and create if missing) the settings row for this user.
      */
     public function settingsOrCreate(): UserSetting
