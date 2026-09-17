@@ -7,12 +7,14 @@ use App\Models\Account;
 use App\Models\Alert;
 use App\Models\Branch;
 use App\Models\Customer;
+use App\Models\KycDocument;
 use App\Models\Loan;
 use App\Models\SarFiling;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Policies\AccountPolicy;
 use App\Policies\CustomerPolicy;
+use App\Policies\KycDocumentPolicy;
 use App\Policies\TransactionPolicy;
 use App\Observers\ModelAuditObserver;
 use App\Services\AuditService;
@@ -39,9 +41,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(Customer::class, CustomerPolicy::class);
+        Gate::policy(KycDocument::class, KycDocumentPolicy::class);
         Gate::policy(Account::class, AccountPolicy::class);
         Gate::policy(Transaction::class, TransactionPolicy::class);
         Route::pattern('id', '[0-9]+');
+        Route::pattern('customer', '[0-9]+');
 
         // Audit every create/update/delete on security-relevant domain models.
         // The users table uses a field whitelist (see ModelAuditObserver) so
