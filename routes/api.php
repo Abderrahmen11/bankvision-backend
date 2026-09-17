@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DashboardLayoutController;
+use App\Http\Controllers\Api\KycDocumentController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
@@ -122,6 +123,17 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::delete('customers/{id}', [CustomerController::class, 'destroy']);
     });
+
+    /*
+    |----------------------------------------------------------------------
+    | KYC Documents — upload/verify, list, metadata, auth-gated download, delete
+    |----------------------------------------------------------------------
+    */
+    Route::post('customers/{customer}/kyc-documents', [KycDocumentController::class, 'store']);
+    Route::get('customers/{customer}/kyc-documents',  [KycDocumentController::class, 'index']);
+    Route::get('kyc-documents/{id}',                  [KycDocumentController::class, 'show']);
+    Route::get('kyc-documents/{id}/download',         [KycDocumentController::class, 'download']);
+    Route::delete('kyc-documents/{id}',               [KycDocumentController::class, 'destroy']);
 
     /*
     |----------------------------------------------------------------------
