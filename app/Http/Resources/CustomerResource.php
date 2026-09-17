@@ -30,6 +30,7 @@ class CustomerResource extends JsonResource
             'relationship_manager' => UserResource::make($this->whenLoaded('relationshipManager')),
             'accounts_count'       => $this->whenCounted('accounts'),
             'loans_count'          => $this->whenCounted('loans'),
+            'document_count'       => (int) ($this->document_count ?? $this->kyc_documents_count ?? ($this->relationLoaded('kycDocuments') ? $this->kycDocuments->count() : 0)),
             'total_balance'        => (float) ($this->total_balance ?? 0),
             'created_at'           => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at'           => $this->updated_at?->format('Y-m-d H:i:s'),

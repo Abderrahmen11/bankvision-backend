@@ -26,7 +26,7 @@ class CustomerService
 
         $query = Customer::query()
             ->with(['branch', 'relationshipManager'])
-            ->withCount(['accounts', 'loans'])
+            ->withCount(['accounts', 'loans', 'kycDocuments as document_count'])
             ->withSum('accounts as total_balance', 'balance')
             ->filter($filters);
 
@@ -59,7 +59,7 @@ class CustomerService
         $user = $user ?? auth()->user();
             if ($user) BranchScope::ensure($user);
         $customer = Customer::with(['branch', 'relationshipManager'])
-            ->withCount(['accounts', 'loans'])
+            ->withCount(['accounts', 'loans', 'kycDocuments as document_count'])
             ->withSum('accounts as total_balance', 'balance')
             ->findOrFail($id);
 
