@@ -787,24 +787,12 @@ Approve a pending loan application. Transitions status to `active`.
 
 - **Role**: `admin`, `manager`
 
-**Response (`200 OK`):**
-```json
-{
-  "success": true,
-  "message": "Loan approved and activated successfully.",
-  "data": {
-    "id": 18,
-    "status": "active"
-  }
-}
-```
-
 ---
 
-## 6. Alert Endpoints
+## 7. Alert Endpoints
 
 ### `GET /api/alerts`
-List security, compliance, and AML alerts with optional filters.
+List compliance, AML, and security alerts with optional filters.
 
 - **Role**: All authenticated roles
 - **Query Parameters**:
@@ -816,14 +804,14 @@ List security, compliance, and AML alerts with optional filters.
 ---
 
 ### `GET /api/alerts/{id}`
-Retrieve single alert details with linked polymorphic entity (`Customer`, `Account`, `Transaction`, or `Loan`).
+Retrieve single alert details with linked entity (`Customer`, `Account`, `Transaction`, or `Loan`).
 
 - **Role**: All authenticated roles
 
 ---
 
 ### `POST /api/alerts/{id}/assign`
-Assign an alert to a specific compliance officer / staff member. Transitions status to `in-progress` if currently `open`.
+Assign an alert to a specific compliance officer. Transitions status to `in-progress` if `open`.
 
 - **Role**: `admin`, `manager`, `compliance`
 
@@ -832,142 +820,130 @@ Assign an alert to a specific compliance officer / staff member. Transitions sta
 | :--- | :--- | :--- |
 | `user_id` | `integer` | `required`, `exists:users,id` |
 
-**Request Example:**
-```json
-{
-  "user_id": 3
-}
-```
-
-**Response (`200 OK`):**
-```json
-{
-  "success": true,
-  "message": "Alert assigned successfully.",
-  "data": {
-    "id": 5,
-    "alert_number": "ALT-2026-58219",
-    "status": "in-progress",
-    "assigned_to": {
-      "id": 3,
-      "name": "David Compliance",
-      "email": "compliance@bankvision.com"
-    }
-  }
-}
-```
-
 ---
 
 ### `POST /api/alerts/{id}/resolve`
-Mark an alert as resolved and record the `resolved_at` timestamp.
+Mark an alert as resolved and record resolution timestamp.
 
 - **Role**: `admin`, `manager`, `compliance`
+
+---
+
+## 8. Suspicious Activity Report (SAR) Endpoints
+
+Used by compliance officers and management for FinCEN / regulatory anti-money laundering filings.
+
+### `GET /api/sar-filings`
+List paginated SAR filings with search and status filters.
+
+- **Role**: `admin`, `manager`, `compliance`, `analyst`, `auditor`
+- **Query Parameters**:
+  - `search` (`string`, optional): Search customer name, number, or narrative
+  - `status` (`string`, optional): `draft`, `under_review`, `filed`, `escalated`
+  - `page` (`integer`, optional): Page number
+  - `per_page` (`integer`, optional): Results per page (default: 15)
 
 **Response (`200 OK`):**
 ```json
 {
+  "data": [
+    {
+      "id": 1,
+      "reference": "SAR-2026-00001",
+      "customer_name": "ACME Holdings Corp",
+      "customer_number": "CUST-2026-00045",
+      "category": "Structuring / Smurfing (<$10k Cash)",
+      "amount": "49500.00",
+      "status": "under_review",
+      "narrative": "Five consecutive deposits of $9,900 made over 48 hours across three branches.",
+      "action_taken": "Accounts frozen pending compliance review",
+      "alert_id": 14,
+      "created_at": "2026-09-18 14:30:00",
+      "user": {
+        "id": 3,
+        "name": "David Compliance",
+        "email": "compliance@bankvision.com"
+      }
+    }
+  ]
+}
+```
+
+---
+
+### `POST /api/sar-filings`
+File a new Suspicious Activity Report.
+
+- **Role**: `admin`, `manager`, `compliance`
+
+**Validation Rules:**
+| Field | Type | Rules | Description |
+| :--- | :--- | :--- | :--- |
+| `customer_name` | `string` | `required`, `max:255` | Name of suspect customer |
+| `customer_number` | `string` | `nullable`, `max:50` | Customer reference number |
+| `category` | `string` | `required`, `in:Structuring / Smurfing (<$10k Cash),Rapid Wire Movement / Pass-through Account,Unusual Transaction for Profile / Industry,Suspected Shell Company / Opaque Ownership,PEP (Politically Exposed Person) Sanctions Check,Terrorist Financing Suspicion,Cyber Fraud / Account Takeover Infiltration` | FinCEN AML classification |
+| `amount` | `numeric` | `required`, `min:0.01` | Aggregate suspicious amount |
+| `status` | `string` | `sometimes`, `in:draft,under_review,filed,escalated` | Default `draft` |
+| `narrative` | `string` | `required`, `min:15`, `max:5000` | Detailed case narrative |
+| `action_taken` | `string` | `nullable`, `max:255` | Immediate action taken |
+| `alert_id` | `integer` | `nullable`, `exists:alerts,id` | Linked compliance alert |
+
+**Response (`201 Created`):**
+```json
+{
   "success": true,
-  "message": "Alert resolved successfully.",
+  "message": "Suspicious Activity Report SAR-2026-00002 recorded.",
   "data": {
-    "id": 5,
-    "status": "resolved",
-    "resolved_at": "2026-08-23 15:50:00"
+    "id": 2,
+    "reference": "SAR-2026-00002",
+    "customer_name": "Alexander Vance",
+    "status": "draft"
   }
 }
 ```
 
 ---
 
-## 7. Branch Endpoints
+## 9. Branch Endpoints
 
 ### `GET /api/branches`
-List paginated physical bank branches with manager information and total employee counts.
+List paginated physical bank branches.
 
 - **Role**: All authenticated roles
-- **Scoping**:
-  - `admin`, `compliance`, `analyst`, `auditor`: See all branches bank-wide.
-  - `manager`, `csr`: See **only their assigned branch** (returns a list of 1).
-- **Query Parameters**:
-  - `search` (`string`, optional): Search branch code, name, or phone
-  - `status` (`string`, optional): `active`, `inactive`, `under_renovation`
-  - `city` (`string`, optional): Filter by city
-  - `manager_id` (`integer`, optional): Filter by assigned manager
-  - `sort_by` (`string`, optional): Column to sort (default: `created_at`)
-  - `sort_direction` (`string`, optional): `asc` or `desc`
-  - `per_page` (`integer`, optional): Results per page (default: 15)
+- **Scoping**: `manager` and `csr` see **only their assigned branch**.
+- **Query Parameters**: `search`, `status`, `city`, `manager_id`, `sort_by`, `sort_direction`, `per_page`
 
 ---
 
 ### `GET /api/branches/{id}`
 Retrieve single branch details.
 
-- **Role**: All authenticated roles
-- **Scoping**: `manager` and `csr` can only view their own assigned branch. Accessing any other branch ID returns `403 Forbidden`.
+- **Role**: All authenticated roles (`manager` and `csr` restricted to own branch)
 
 ---
 
 ### `POST /api/branches`
-Create a new bank branch.
+Create a new branch.
 
 - **Role**: `admin`
 
 **Validation Rules:**
 | Field | Type | Rules |
 | :--- | :--- | :--- |
-| `branch_code` | `string` | `required`, `string`, `unique:branches,branch_code` |
-| `branch_name` | `string` | `required`, `string`, `max:255` |
+| `branch_code` | `string` | `required`, `unique:branches,branch_code` |
+| `branch_name` | `string` | `required`, `max:255` |
 | `address` | `string` | `nullable` |
 | `city` | `string` | `nullable`, `max:100` |
 | `phone` | `string` | `nullable`, `max:20` |
 | `status` | `string` | `sometimes`, `in:active,inactive,under_renovation` |
 | `manager_id` | `integer` | `nullable`, `exists:users,id` |
-
-**Request Example:**
-```json
-{
-  "branch_code": "BR005",
-  "branch_name": "Uptown Financial Center",
-  "address": "500 Madison Ave",
-  "city": "Metropolis",
-  "phone": "+1-555-9000",
-  "status": "active",
-  "manager_id": 2
-}
-```
-
-**Response (`201 Created`):**
-```json
-{
-  "success": true,
-  "message": "Branch created successfully.",
-  "data": {
-    "id": 5,
-    "branch_code": "BR005",
-    "branch_name": "Uptown Financial Center",
-    "city": "Metropolis",
-    "status": "active",
-    "total_employees": 0
-  }
-}
-```
 
 ---
 
 ### `PUT /api/branches/{id}`
-Update branch details.
+Update branch information.
 
 - **Role**: `admin`
-
-**Validation Rules:**
-| Field | Type | Rules |
-| :--- | :--- | :--- |
-| `branch_name` | `string` | `sometimes`, `max:255` |
-| `address` | `string` | `nullable` |
-| `city` | `string` | `nullable`, `max:100` |
-| `phone` | `string` | `nullable`, `max:20` |
-| `status` | `string` | `sometimes`, `in:active,inactive,under_renovation` |
-| `manager_id` | `integer` | `nullable`, `exists:users,id` |
 
 ---
 
@@ -976,61 +952,50 @@ Delete a branch. Cannot be deleted if employees or customers are assigned to it.
 
 - **Role**: `admin`
 
-**Response (`200 OK`):**
-```json
-{
-  "success": true,
-  "message": "Branch deleted successfully."
-}
-```
+---
+
+## 10. User & Staff Management Endpoints
+
+### `GET /api/users`
+List staff accounts with role filtering, status, and pagination.
+
+- **Role**: `admin`, `manager`, `compliance`, `analyst`, `auditor`
+- **Scoping**: `manager` sees only staff assigned to their branch.
+- **Query Parameters**:
+  - `search` (`string`, optional): Search name, email, or phone
+  - `role` (`string`, optional): `admin`, `manager`, `compliance`, `analyst`, `csr`, `auditor`
+  - `status` (`string`, optional): `pending`, `active`, `suspended`
+  - `branch_id` (`integer`, optional): Filter by branch (admin/auditor only)
+  - `page` (`integer`, optional)
+  - `per_page` (`integer`, optional)
 
 ---
 
-## 8. Dashboard Endpoints
+### `GET /api/users/{id}`
+Retrieve single user account details.
 
-### `GET /api/dashboard/stats`
-Retrieve aggregated KPI statistics (cached for 60 seconds).
-
-- **Role**: All authenticated roles
-
-**Response (`200 OK`):**
-```json
-{
-  "success": true,
-  "data": {
-    "total_customers": 150,
-    "total_accounts": 280,
-    "total_transactions": 1420,
-    "total_loans": 45,
-    "open_alerts": 8,
-    "flagged_transactions": 3,
-    "pending_loans": 5,
-    "active_accounts": 265
-  }
-}
-```
+- **Role**: `admin`, `manager`, `compliance`, `analyst`, `auditor`
 
 ---
 
-### `GET /api/dashboard/chart-data`
-Retrieve daily transaction volume and transaction count for the last 30 days (cached for 300 seconds).
+### `GET /api/users/eligible-relationship-managers`
+Retrieve active staff eligible to be assigned as customer Relationship Managers (`manager`, `csr`) for a branch.
 
-- **Role**: All authenticated roles
+- **Role**: `admin`, `manager`, `csr`
+- **Scoping**: `manager` and `csr` can only query their own branch.
+- **Query Parameters**:
+  - `branch_id` (`integer`, required): Branch ID to look up
 
 **Response (`200 OK`):**
 ```json
 {
-  "success": true,
   "data": [
     {
-      "date": "2026-07-25",
-      "count": 42,
-      "volume": "128450.50"
-    },
-    {
-      "date": "2026-07-26",
-      "count": 38,
-      "volume": "94200.00"
+      "id": 2,
+      "name": "James Smith",
+      "email": "manager@bankvision.com",
+      "role": "manager",
+      "branch_id": 1
     }
   ]
 }
@@ -1038,8 +1003,170 @@ Retrieve daily transaction volume and transaction count for the last 30 days (ca
 
 ---
 
+### `POST /api/users`
+Create a new staff account.
+
+- **Role**: `admin`
+
+**Validation Rules:**
+| Field | Type | Rules | Description |
+| :--- | :--- | :--- | :--- |
+| `name` | `string` | `required`, `max:255` | Full name |
+| `email` | `string` | `required`, `email`, `max:255`, `unique:users,email` | Unique corporate email |
+| `password` | `string` | `required`, `min:8` | Password |
+| `role` | `string` | `required`, `in:admin,manager,compliance,analyst,csr,auditor` | Assigned role |
+| `branch_id` | `integer` | `nullable`, `exists:branches,id` | Required for branch-scoped roles |
+| `status` | `string` | `sometimes`, `in:pending,active,suspended` | Default `active` |
+| `phone` | `string` | `nullable`, `max:50` | Contact phone |
+
+---
+
+### `PUT /api/users/{id}`
+Update an existing staff account.
+
+- **Role**: `admin`
+
+**Validation Rules:**
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `name` | `string` | `sometimes`, `required`, `max:255` |
+| `email` | `string` | `sometimes`, `required`, `email`, `unique:users,email,{id}` |
+| `password` | `string` | `sometimes`, `nullable`, `min:8` |
+| `role` | `string` | `sometimes`, `required`, `in:admin,manager,compliance,analyst,csr,auditor` |
+| `branch_id` | `integer` | `nullable`, `exists:branches,id` |
+| `status` | `string` | `sometimes`, `required`, `in:pending,active,suspended` |
+| `phone` | `string` | `nullable`, `max:50` |
+
+---
+
+### `DELETE /api/users/{id}`
+Delete a staff account. Cannot delete self or users with active operational assignments.
+
+- **Role**: `admin`
+
+---
+
+## 11. Audit Log Endpoints
+
+Immutable compliance and security trail recording actions across models, users, and IP addresses.
+
+### `GET /api/audit-logs`
+List paginated audit logs with rich multi-parameter filtering.
+
+- **Role**: `admin`, `auditor`, `compliance`, `manager`
+- **Scoping**:
+  - `admin`, `auditor`: Full bank-wide audit logs.
+  - `compliance`: Restricted to compliance-relevant models (`customers`, `accounts`, `transactions`, `loans`, `alerts`) and critical actions (`approve`, `flag`, `freeze`, etc.).
+  - `manager`: Restricted to actions performed by staff in their assigned branch.
+- **Query Parameters**:
+  - `search` (`string`, optional)
+  - `action` (`string`, optional): e.g. `login`, `create`, `update`, `approve`, `flag`
+  - `table_name` (`string`, optional): e.g. `transactions`, `customers`, `users`
+  - `user_id` (`integer`, optional)
+  - `record_id` (`integer`, optional)
+  - `ip_address` (`string`, optional)
+  - `role` (`string`, optional)
+  - `date_from` (`date`, optional): `YYYY-MM-DD`
+  - `date_to` (`date`, optional): `YYYY-MM-DD`
+  - `sort_by` (`string`, optional): `created_at`, `action`, `table_name`, `record_id`, `ip_address`
+  - `sort_direction` (`string`, optional): `asc` or `desc`
+  - `page` (`integer`, optional)
+  - `per_page` (`integer`, optional): Max 100
+
+**Response (`200 OK`):**
+```json
+{
+  "data": [
+    {
+      "id": 140,
+      "action": "transaction.approve",
+      "table_name": "transactions",
+      "record_id": 89,
+      "ip_address": "192.168.1.50",
+      "old_values": { "status": "pending" },
+      "new_values": { "status": "completed", "approved_at": "2026-09-19 14:00:00" },
+      "created_at": "2026-09-19 14:00:00",
+      "user": {
+        "id": 2,
+        "name": "James Smith",
+        "role": "manager"
+      }
+    }
+  ]
+}
+```
+
+---
+
+### `GET /api/audit-logs/{id}`
+Retrieve single audit log entry with diff details.
+
+- **Role**: `admin`, `auditor`, `compliance`, `manager` (subject to scoping rules)
+
+---
+
+## 12. Dashboard & Analytical Reports Endpoints
+
+### `GET /api/dashboard/stats`
+Aggregated high-level KPI metrics (cached for 60 seconds).
+
+- **Role**: All authenticated roles
+
+---
+
+### `GET /api/dashboard/chart-data`
+Daily transaction volume and transaction count for charting.
+
+- **Role**: All authenticated roles
+- **Query Parameters**:
+  - `days` (`integer`, optional): Number of days (default: 30)
+
+---
+
 ### `GET /api/dashboard/recent-activity`
-Retrieve recent transactions and open alerts for the dashboard activity feed.
+Recent transactions and open alerts for the activity feed.
+
+- **Role**: All authenticated roles
+- **Query Parameters**:
+  - `limit` (`integer`, optional): Number of records (default: 10)
+
+---
+
+### `GET /api/dashboard/risk-analysis`
+Comprehensive risk distribution across customers, loans, transactions, and branches.
+
+- **Role**: All authenticated roles (also available at alias `/api/reports/risk-analysis`)
+
+---
+
+### `GET /api/dashboard/reports`
+Analytical portfolio and transaction reports with date-range and branch breakdowns.
+
+- **Role**: `admin`, `manager`, `compliance`, `analyst`, `auditor` (also available at alias `/api/reports`)
+- **Query Parameters**:
+  - `start_date` (`date`, optional): `YYYY-MM-DD`
+  - `end_date` (`date`, optional): `YYYY-MM-DD`
+  - `branch_id` (`integer`, optional): Filter branch
+  - `period` (`string`, optional): `monthly`, `quarterly`, `yearly`
+
+---
+
+### `GET /api/dashboard/audit-stats`
+Auditor investigation dashboard: total audit events, destructive action tallies, suspicious activities, and 24h event timeline.
+
+- **Role**: `admin`, `auditor`
+
+---
+
+### `GET /api/dashboard/audit-report`
+Auditor investigation report: destructive action breakdown, user activity rankings, high-risk customer audit logs, flagged transactions, and at-risk loans.
+
+- **Role**: `admin`, `auditor`
+
+---
+
+### `GET /api/dashboard/layout`
+Get current user's personalized dashboard layout, or fall back to their role-based default.
 
 - **Role**: All authenticated roles
 
@@ -1048,28 +1175,376 @@ Retrieve recent transactions and open alerts for the dashboard activity feed.
 {
   "success": true,
   "data": {
-    "recent_transactions": [
-      {
-        "type": "transaction",
-        "id": 89,
-        "number": "TXN-2026-00089",
-        "description": "Deposit — USD 2,500.00",
-        "status": "completed",
-        "customer": "John Doe",
-        "date": "2026-08-23 15:45:10"
-      }
+    "id": 1,
+    "user_id": 1,
+    "role": "admin",
+    "layout_data": [
+      { "id": "stats", "x": 0, "y": 0, "w": 12, "h": 2, "visible": true },
+      { "id": "charts", "x": 0, "y": 2, "w": 8, "h": 4, "visible": true },
+      { "id": "recentActivity", "x": 8, "y": 2, "w": 4, "h": 4, "visible": true }
     ],
-    "recent_alerts": [
+    "is_custom": true
+  }
+}
+```
+
+---
+
+### `PUT /api/dashboard/layout`
+Persist custom grid positions, sizes, and visibility of dashboard widgets.
+
+- **Role**: All authenticated roles
+
+**Validation Rules:**
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `layout_data` | `array` | `required`, `array` |
+| `layout_data.*.id` | `string` | `required`, `string` |
+| `layout_data.*.visible` | `boolean` | `sometimes`, `boolean` |
+
+---
+
+### `POST /api/dashboard/layout/reset`
+Reset the user's dashboard layout to their role's canonical default layout.
+
+- **Role**: All authenticated roles
+
+---
+
+## 13. In-App Notification Endpoints
+
+### `GET /api/notifications`
+Retrieve latest in-app notifications for the authenticated user along with total unread count.
+
+- **Role**: All authenticated roles
+- **Query Parameters**:
+  - `limit` (`integer`, optional): Default: 15
+
+**Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "data": {
+    "unread_count": 2,
+    "notifications": [
       {
-        "type": "alert",
-        "id": 5,
-        "number": "ALT-2026-58219",
-        "description": "Large cross-border wire transfer detected.",
-        "severity": "high",
-        "alert_type": "suspicious_transaction",
-        "date": "2026-08-23 15:40:00"
+        "id": 18,
+        "title": "New sign-in detected",
+        "message": "You signed in to BankVision from a new session.",
+        "link": "/dashboard",
+        "type": "info",
+        "read": false,
+        "created_at": "2026-09-19 15:30:00"
       }
     ]
+  }
+}
+```
+
+---
+
+### `POST /api/notifications/{id}/read`
+Mark a specific notification as read.
+
+- **Role**: All authenticated roles
+
+---
+
+### `POST /api/notifications/read-all`
+Mark all unread notifications for the current user as read.
+
+- **Role**: All authenticated roles
+
+---
+
+## 14. Settings & Administration Endpoints
+
+### Profile & Identity (All roles)
+
+#### `PUT /api/settings/profile`
+Update own name, email, and phone.
+
+**Validation Rules:**
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `name` | `string` | `sometimes`, `required`, `max:255` |
+| `email` | `string` | `sometimes`, `required`, `email`, `max:255`, `unique:users,email,{id}` |
+| `phone` | `string` | `nullable`, `max:50` |
+
+---
+
+#### `PUT /api/settings/profile/password`
+Update password. Verifies current password before updating.
+
+**Validation Rules:**
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `current_password` | `string` | `required` (must match current hash) |
+| `password` | `string` | `required`, `min:8`, `confirmed` |
+| `password_confirmation` | `string` | `required` |
+
+---
+
+#### `POST /api/settings/profile/avatar`
+Upload a profile photo. Replaces any previous photo and stores on public disk.
+
+- **Headers**: `Content-Type: multipart/form-data`
+- **Validation**: `avatar` (`required`, `image`, `mimes:jpg,jpeg,png,webp`, `max:2048`)
+
+---
+
+#### `DELETE /api/settings/profile/avatar`
+Remove own profile photo.
+
+---
+
+### User Preferences & Notifications (All roles)
+
+#### `GET /api/settings`
+Retrieve combined user settings (2FA state, notification toggles, UI preferences).
+
+---
+
+#### `PUT /api/settings/notifications`
+Update notification channel preferences and alert category subscriptions.
+
+**Validation Rules:**
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `email_notifications` | `boolean` | `sometimes`, `boolean` |
+| `push_notifications` | `boolean` | `sometimes`, `boolean` |
+| `transaction_alerts` | `boolean` | `sometimes`, `boolean` |
+| `loan_alerts` | `boolean` | `sometimes`, `boolean` |
+| `account_alerts` | `boolean` | `sometimes`, `boolean` |
+| `weekly_digest` | `boolean` | `sometimes`, `boolean` |
+| `alert_preferences` | `array` | `sometimes`, `array` (critical, high, medium, low booleans) |
+
+---
+
+#### `PUT /api/settings/preferences`
+Update UI theme, language, dashboard view density, and timezone.
+
+**Validation Rules:**
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `theme` | `string` | `sometimes`, `in:dark,light,system` |
+| `language` | `string` | `sometimes`, `in:en,fr,es,de,ar` |
+| `dashboard_view` | `string` | `sometimes`, `in:default,compact,detailed` |
+| `timezone` | `string` | `sometimes`, valid timezone string |
+| `date_format` | `string` | `sometimes`, `in:Y-m-d,d/m/Y,m/d/Y,d M Y` |
+| `items_per_page` | `integer` | `sometimes`, `in:10,15,25,50,100` |
+
+---
+
+### Security & Sessions (All roles)
+
+#### `POST /api/settings/security/2fa`
+Toggle two-factor authentication. Disabling takes effect immediately. Enabling triggers an email verification challenge.
+
+**Validation Rules:**
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `enabled` | `boolean` | `required`, `boolean` |
+| `channel` | `string` | `sometimes`, `in:email,sms,authenticator` (email supported) |
+
+---
+
+#### `POST /api/settings/security/2fa/send-code`
+Send a one-time 6-digit confirmation code to email to activate 2FA. Code expires in 10 minutes.
+
+---
+
+#### `POST /api/settings/security/2fa/verify`
+Verify code and enable 2FA on the account.
+
+**Validation Rules:**
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `code` | `string` | `required`, `string` |
+
+---
+
+#### `GET /api/settings/security/sessions`
+List all active personal access tokens for the user, highlighting the current session.
+
+---
+
+#### `DELETE /api/settings/security/sessions/{id}`
+Revoke a specific session. Current active session cannot be revoked via this endpoint (use `/api/logout`).
+
+---
+
+#### `POST /api/settings/security/sessions/revoke-all`
+Revoke all other active sessions for the authenticated user.
+
+---
+
+#### `GET /api/settings/security/login-history`
+List paginated historical logins with IP address, browser, platform, and success status.
+
+- **Query Parameters**: `per_page` (default: 15, max: 100)
+
+---
+
+### API Token Management (Admin only)
+
+#### `GET /api/settings/security/tokens`
+List all personal access tokens issued across the platform.
+
+- **Role**: `admin`
+- **Query Parameters**: `per_page` (default: 15)
+
+---
+
+#### `POST /api/settings/security/tokens`
+Issue a new programmatic API token.
+
+- **Role**: `admin`
+
+**Validation Rules:**
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `name` | `string` | `required`, `max:255` |
+| `abilities` | `array` | `sometimes`, `array` (list of abilities) |
+
+**Response (`201 Created`):**
+```json
+{
+  "success": true,
+  "message": "API token created successfully.",
+  "data": {
+    "id": 5,
+    "name": "Integration-Service-Token",
+    "token": "5|gT891...PqL"
+  }
+}
+```
+
+---
+
+#### `DELETE /api/settings/security/tokens/{id}`
+Revoke an API token.
+
+- **Role**: `admin`
+
+---
+
+### System Configuration & Health (Admin only)
+
+#### `GET /api/settings/system`
+Retrieve institution-wide parameters (bank identity, SWIFT code, currency, default interest rates).
+
+- **Role**: `admin`
+
+---
+
+#### `PUT /api/settings/system`
+Update institution-wide configuration and baseline interest rates.
+
+- **Role**: `admin`
+
+**Validation Rules:**
+| Field | Type | Rules | Description |
+| :--- | :--- | :--- | :--- |
+| `bank.name` | `string` | `sometimes`, `required`, `max:255` | Institution name |
+| `bank.legal_name` | `string` | `sometimes`, `required`, `max:255` | Registered legal entity |
+| `bank.address` | `string` | `sometimes`, `required`, `max:500` | Headquarters address |
+| `bank.city` | `string` | `sometimes`, `required`, `max:100` | City |
+| `bank.country` | `string` | `sometimes`, `required`, `max:100` | Country |
+| `bank.phone` | `string` | `sometimes`, `required`, `max:50` | Primary phone |
+| `bank.email` | `string` | `sometimes`, `required`, `email` | Primary contact email |
+| `bank.swift_code` | `string` | `sometimes`, `required`, `max:20` | SWIFT / BIC |
+| `bank.website` | `string` | `sometimes`, `required`, `max:255` | Corporate website |
+| `currency.code` | `string` | `sometimes`, `in:USD,EUR,GBP,TND,CHF,JPY` | Operating currency |
+| `currency.symbol` | `string` | `sometimes`, `required`, `max:10` | Currency symbol |
+| `interest.savings_rate` | `numeric` | `sometimes`, `min:0`, `max:100` | Annual savings % |
+| `interest.checking_rate` | `numeric` | `sometimes`, `min:0`, `max:100` | Annual checking % |
+| `interest.fixed_deposit_rate` | `numeric` | `sometimes`, `min:0`, `max:100` | Annual fixed deposit % |
+| `interest.personal_loan_rate` | `numeric` | `sometimes`, `min:0`, `max:100` | Annual personal loan % |
+| `interest.business_loan_rate` | `numeric` | `sometimes`, `min:0`, `max:100` | Annual business loan % |
+| `interest.mortgage_rate` | `numeric` | `sometimes`, `min:0`, `max:100` | Annual mortgage % |
+| `interest.overdraft_rate` | `numeric` | `sometimes`, `min:0`, `max:100` | Annual overdraft % |
+| `interest.late_payment_penalty`| `numeric` | `sometimes`, `min:0`, `max:100` | Penalty % |
+
+---
+
+#### `GET /api/settings/system/health`
+Platform health snapshot for operations monitoring.
+
+- **Role**: `admin`
+
+**Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "database": "connected",
+    "cache": "operational",
+    "storage": "writable",
+    "environment": "local",
+    "php_version": "8.2.12",
+    "laravel_version": "11.x"
+  }
+}
+```
+
+---
+
+## 15. Global Search & Public Endpoints
+
+### `GET /api/search`
+Grouped global search used as a server-side bridge for external clients. Searches across customers, accounts, transactions, loans, alerts, users, branches, and audit logs according to the authenticated user's permissions and branch scoping.
+
+- **Role**: All authenticated roles
+- **Query Parameters**:
+  - `q` (`string`, required): Search string (minimum 2 characters)
+
+**Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "data": {
+    "customers": [
+      {
+        "id": 10,
+        "title": "John Doe",
+        "subtitle": "#CUST-2026-00010",
+        "meta": "john.doe@example.com"
+      }
+    ],
+    "accounts": [
+      {
+        "id": 4,
+        "title": "ACC-2026-00004",
+        "subtitle": "Savings · John Doe",
+        "meta": "14,500.000 USD · Active"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### `GET /api/public/interest-rates`
+Published deposit and lending interest rates. Publicly accessible without authentication (mirrors marketing rate sheets).
+
+- **Role**: Public (No authentication required)
+
+**Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "data": {
+    "savings_rate": 2.5,
+    "checking_rate": 0.5,
+    "fixed_deposit_rate": 4.25,
+    "personal_loan_rate": 7.5,
+    "business_loan_rate": 6.0,
+    "mortgage_rate": 4.8,
+    "overdraft_rate": 12.0,
+    "late_payment_penalty": 2.0
   }
 }
 ```
