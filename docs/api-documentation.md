@@ -144,16 +144,16 @@ Content-Type: application/json
 ```json
 {
   "success": false,
-  "message": "Customer not found."
+  "message": "Resource not found."
 }
 ```
 
 ---
 
-## 1. Authentication Endpoints
+## 1. Authentication & 2FA Endpoints
 
 ### `POST /api/login`
-Authenticate staff credentials, verify active status, and generate a Sanctum API token. Rate-limited to 5 requests per minute.
+Authenticate staff credentials, verify active status, and generate a Sanctum API token. When 2FA is active for the user, the token is withheld and a one-time verification challenge is dispatched to the user's registered email. Rate-limited to 5 requests per minute (`throttle:login`).
 
 - **Role**: Public
 - **Headers**: `Accept: application/json`, `Content-Type: application/json`
@@ -172,7 +172,7 @@ Authenticate staff credentials, verify active status, and generate a Sanctum API
 }
 ```
 
-**Response (`200 OK`):**
+**Standard Response (`200 OK` - 2FA disabled):**
 ```json
 {
   "success": true,
@@ -185,7 +185,9 @@ Authenticate staff credentials, verify active status, and generate a Sanctum API
     "role": "admin",
     "status": "active",
     "phone": "+1-555-0199",
-    "last_login_at": "2026-08-23 15:30:00",
+    "avatar": "avatars/admin.png",
+    "avatar_url": "http://localhost:8000/storage/avatars/admin.png",
+    "last_login_at": "2026-09-19 15:30:00",
     "branch": {
       "id": 1,
       "branch_code": "BR001",
@@ -197,13 +199,76 @@ Authenticate staff credentials, verify active status, and generate a Sanctum API
 }
 ```
 
+**2FA Challenge Response (`200 OK` - 2FA enabled):**
+```json
+{
+  "success": false,
+  "requires_2fa": true,
+  "message": "A verification code has been sent to your email address.",
+  "email": "ad***@bankvision.com",
+  "dev_hint": "Development: the verification code is written to storage/logs/laravel.log"
+}
+```
+
+---
+
+### `POST /api/login/2fa`
+Complete a two-factor login challenge. Verifies the 6-digit code sent by email and issues the Sanctum Bearer token. Rate-limited (`throttle:login`).
+
+- **Role**: Public
+
+**Validation Rules:**
+| Field | Type | Rules | Description |
+| :--- | :--- | :--- | :--- |
+| `email` | `string` | `required`, `email` | Staff email address |
+| `code` | `string` | `required`, `string` | 6-digit verification code |
+
+**Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "message": "Authenticated successfully.",
+  "token": "2|kL82N...PqR",
+  "user": {
+    "id": 1,
+    "name": "Sarah Connor",
+    "email": "admin@bankvision.com",
+    "role": "admin",
+    "status": "active",
+    "branch": { ... }
+  }
+}
+```
+
+---
+
+### `POST /api/login/2fa/resend`
+Re-issues and sends a fresh 2FA verification code to the user's email if a login challenge is active. Rate-limited (`throttle:login`).
+
+- **Role**: Public
+
+**Validation Rules:**
+| Field | Type | Rules | Description |
+| :--- | :--- | :--- | :--- |
+| `email` | `string` | `required`, `email` | Staff email address |
+
+**Response (`200 OK`):**
+```json
+{
+  "success": false,
+  "requires_2fa": true,
+  "message": "A new verification code has been sent to your email address.",
+  "email": "ad***@bankvision.com"
+}
+```
+
 ---
 
 ### `POST /api/logout`
-Revoke the current Sanctum access token for the authenticated user.
+Revoke the current Sanctum access token for the authenticated user and record an audit log entry.
 
 - **Role**: All authenticated roles
-- **Headers**: `Authorization: Bearer <token>`, `Accept: application/json`
+- **Headers**: `Authorization: Bearer <token>`
 
 **Response (`200 OK`):**
 ```json
@@ -216,10 +281,9 @@ Revoke the current Sanctum access token for the authenticated user.
 ---
 
 ### `GET /api/user`
-Retrieve current authenticated staff profile.
+Retrieve current authenticated staff profile with assigned branch details.
 
 - **Role**: All authenticated roles
-- **Headers**: `Authorization: Bearer <token>`, `Accept: application/json`
 
 **Response (`200 OK`):**
 ```json
@@ -232,13 +296,12 @@ Retrieve current authenticated staff profile.
     "role": "admin",
     "status": "active",
     "phone": "+1-555-0199",
-    "last_login_at": "2026-08-23 15:30:00",
+    "avatar_url": "http://localhost:8000/storage/avatars/admin.png",
+    "last_login_at": "2026-09-19 15:30:00",
     "branch": {
       "id": 1,
       "branch_code": "BR001",
-      "branch_name": "Main Downtown Branch",
-      "city": "Metropolis",
-      "status": "active"
+      "branch_name": "Main Downtown Branch"
     }
   }
 }
