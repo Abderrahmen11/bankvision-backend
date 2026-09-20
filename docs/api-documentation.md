@@ -608,21 +608,10 @@ Open a new bank account.
 | :--- | :--- | :--- | :--- |
 | `customer_id` | `integer` | `required`, `exists:customers,id` | Customer ID |
 | `account_type` | `string` | `required`, `in:savings,checking,business` | Account type |
-| `currency` | `string` | `sometimes`, `size:3` | Currency code (default `USD`) |
+| `currency` | `string` | `sometimes`, `size:3` | Currency code (default: `USD`) |
 | `balance` | `numeric` | `sometimes`, `min:0`, `max:999999999.99` | Initial opening balance |
 | `interest_rate` | `numeric` | `sometimes`, `min:0`, `max:100` | Applicable interest % |
 | `opened_date` | `date` | `sometimes`, `date` | Default: today |
-
-**Request Example:**
-```json
-{
-  "customer_id": 10,
-  "account_type": "savings",
-  "currency": "USD",
-  "balance": 500.00,
-  "interest_rate": 2.5
-}
-```
 
 **Response (`201 Created`):**
 ```json
@@ -638,7 +627,7 @@ Open a new bank account.
     "balance": "500.00",
     "status": "active",
     "interest_rate": "2.50",
-    "opened_date": "2026-08-23"
+    "opened_date": "2026-09-19"
   }
 }
 ```
@@ -646,7 +635,7 @@ Open a new bank account.
 ---
 
 ### `GET /api/accounts/{id}`
-Retrieve single account details with owner information.
+Retrieve single account details with linked owner and branch data.
 
 - **Role**: All authenticated roles
 
@@ -657,9 +646,6 @@ Update account status (freeze/unfreeze) or interest rate.
 
 - **Role**: `admin`, `manager`
 
-> [!CAUTION]
-> **CSR** cannot update or close accounts — returns `403 Forbidden`.
-
 **Validation Rules:**
 | Field | Type | Rules |
 | :--- | :--- | :--- |
@@ -669,20 +655,9 @@ Update account status (freeze/unfreeze) or interest rate.
 ---
 
 ### `DELETE /api/accounts/{id}`
-Close an account (sets status to `closed`). Cannot be deleted if account has a non-zero balance.
+Close an account (sets status to `closed`). Account must have balance = 0.
 
 - **Role**: `admin`, `manager`
-
-> [!CAUTION]
-> **CSR** cannot close accounts — returns `403 Forbidden`.
-
-**Response (`200 OK`):**
-```json
-{
-  "success": true,
-  "message": "Account closed successfully."
-}
-```
 
 ---
 
@@ -690,15 +665,11 @@ Close an account (sets status to `closed`). Cannot be deleted if account has a n
 List transaction history for a specific account.
 
 - **Role**: All authenticated roles
-- **Query Parameters**:
-  - `type` (`string`, optional): `deposit`, `withdrawal`, `transfer`, `wire`
-  - `status` (`string`, optional): `completed`, `pending`, `failed`, `flagged`
-  - `date_from` (`date`, optional): `YYYY-MM-DD`
-  - `date_to` (`date`, optional): `YYYY-MM-DD`
+- **Query Parameters**: `type`, `status`, `date_from`, `date_to`, `page`, `per_page`
 
 ---
 
-## 4. Transaction Endpoints
+## 5. Transaction Endpoints
 
 ### `GET /api/transactions`
 List paginated transactions across the institution.
