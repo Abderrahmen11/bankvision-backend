@@ -687,57 +687,26 @@ List paginated transactions across the institution.
 
 ### `POST /api/transactions`
 Record a new financial transaction.
-- For `completed` status: executes balance change atomically with row-level pessimistic locking.
-- Withdrawals exceeding available balance throw `422 Unprocessable Entity` ("Insufficient funds").
+- Completed transactions execute balance adjustment atomically using pessimistic row-locking (`lockForUpdate`).
+- Withdrawals exceeding available balance reject with `422 Unprocessable Entity` ("Insufficient funds").
 - Transactions on `frozen` or `closed` accounts are rejected.
 
 - **Role**: `admin`, `manager`, `csr`
 - **Scoping**:
-  - `manager` and `csr`: Can only record transactions on accounts belonging to their assigned branch.
-  - `csr`: Restricted to `deposit` and `withdrawal` types only. Attempting `transfer` or `wire` returns `403 Forbidden`.
+  - `manager` and `csr`: Can only record transactions on accounts in their assigned branch.
+  - `csr`: Restricted to `deposit` and `withdrawal` only. Attempting `transfer` or `wire` returns `403 Forbidden`.
 
 **Validation Rules:**
 | Field | Type | Rules | Description |
 | :--- | :--- | :--- | :--- |
 | `account_id` | `integer` | `required`, `exists:accounts,id` | Target account |
-| `transaction_type` | `string` | `required`, `in:deposit,withdrawal,transfer,wire` | Transaction classification |
-| `amount` | `numeric` | `required`, `min:0.01`, `max:999999999.99` | Transaction amount |
+| `transaction_type` | `string` | `required`, `in:deposit,withdrawal,transfer,wire` | Type |
+| `amount` | `numeric` | `required`, `min:0.01`, `max:999999999.99` | Amount |
 | `currency` | `string` | `sometimes`, `size:3` | Default `USD` |
-| `description` | `string` | `nullable` | Memo / description |
-| `channel` | `string` | `sometimes`, `in:online,branch,atm,mobile` | Channel used (default `branch`) |
-| `counterparty` | `string` | `nullable`, `max:255` | Counterparty name/IBAN |
-| `status` | `string` | `sometimes`, `in:completed,pending` | Default: `completed` |
-
-**Request Example:**
-```json
-{
-  "account_id": 4,
-  "transaction_type": "deposit",
-  "amount": 2500.00,
-  "currency": "USD",
-  "channel": "branch",
-  "description": "Payroll direct deposit"
-}
-```
-
-**Response (`201 Created`):**
-```json
-{
-  "success": true,
-  "message": "Transaction recorded successfully.",
-  "data": {
-    "id": 89,
-    "transaction_number": "TXN-2026-00089",
-    "account_id": 4,
-    "transaction_type": "deposit",
-    "amount": "2500.00",
-    "currency": "USD",
-    "status": "completed",
-    "channel": "branch",
-    "transaction_date": "2026-08-23 15:45:10"
-  }
-}
-```
+| `description` | `string` | `nullable` | Description |
+| `channel` | `string` | `sometimes`, `in:online,branch,atm,mobile` | Channel |
+| `counterparty` | `string` | `nullable`, `max:255` | Counterparty info |
+| `status` | `string` | `sometimes`, `in:completed,pending` | Default `completed` |
 
 ---
 
@@ -749,57 +718,23 @@ Retrieve details for a single transaction.
 ---
 
 ### `POST /api/transactions/{id}/approve`
-Approve a pending or flagged transaction. Executes underlying account balance changes atomically and sets approver audit metadata.
+Approve a pending or flagged transaction. Atomically applies balance changes and logs approver metadata.
 
 - **Role**: `admin`, `manager`
-- **Scoping**: `manager` can only approve transactions for accounts in their assigned branch.
-
-> [!CAUTION]
-> **Compliance Officer** cannot approve transactions — returns `403 Forbidden`. The compliance role is restricted to flagging suspicious transactions only.
-
-**Response (`200 OK`):**
-```json
-{
-  "success": true,
-  "message": "Transaction approved successfully.",
-  "data": {
-    "id": 89,
-    "status": "completed",
-    "approved_at": "2026-08-23 15:46:00",
-    "approver": {
-      "id": 3,
-      "name": "David Compliance",
-      "email": "compliance@bankvision.com"
-    }
-  }
-}
-```
 
 ---
 
 ### `POST /api/transactions/{id}/flag`
-Flag a transaction for compliance investigation. Automatically creates a polymorphic compliance alert. If an open alert for this transaction already exists, no duplicate is created.
+Flag a transaction for AML/compliance investigation. Automatically creates a polymorphic compliance alert.
 
 - **Role**: `admin`, `manager`, `compliance`
 
-**Response (`200 OK`):**
-```json
-{
-  "success": true,
-  "message": "Transaction flagged for review.",
-  "data": {
-    "id": 89,
-    "status": "flagged"
-  }
-}
-```
-
 ---
 
-## 5. Loan Endpoints
+## 6. Loan Endpoints
 
 ### `GET /api/loans`
-List paginated loans with optional filters.
+List paginated loans with optional filtering.
 
 - **Role**: All authenticated roles
 - **Query Parameters**: `customer_id`, `type`, `status` (`pending`, `active`, `completed`, `delinquent`, `defaulted`)
