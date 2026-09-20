@@ -10,14 +10,21 @@
 ## Table of Contents
 1. [Authentication & Authorization](#authentication--authorization)
 2. [Global Error & Response Formats](#global-error--response-formats)
-3. [Authentication Endpoints](#1-authentication-endpoints)
+3. [Authentication & 2FA Endpoints](#1-authentication--2fa-endpoints)
 4. [Customer Endpoints](#2-customer-endpoints)
-5. [Account Endpoints](#3-account-endpoints)
-6. [Transaction Endpoints](#4-transaction-endpoints)
-7. [Loan Endpoints](#5-loan-endpoints)
-8. [Alert Endpoints](#6-alert-endpoints)
-9. [Branch Endpoints](#7-branch-endpoints)
-10. [Dashboard Endpoints](#8-dashboard-endpoints)
+5. [KYC Document Endpoints](#3-kyc-document-endpoints)
+6. [Account Endpoints](#4-account-endpoints)
+7. [Transaction Endpoints](#5-transaction-endpoints)
+8. [Loan Endpoints](#6-loan-endpoints)
+9. [Alert Endpoints](#7-alert-endpoints)
+10. [Suspicious Activity Report (SAR) Endpoints](#8-suspicious-activity-report-sar-endpoints)
+11. [Branch Endpoints](#9-branch-endpoints)
+12. [User & Staff Management Endpoints](#10-user--staff-management-endpoints)
+13. [Audit Log Endpoints](#11-audit-log-endpoints)
+14. [Dashboard & Analytical Reports Endpoints](#12-dashboard--analytical-reports-endpoints)
+15. [In-App Notification Endpoints](#13-in-app-notification-endpoints)
+16. [Settings & Administration Endpoints](#14-settings--administration-endpoints)
+17. [Global Search & Public Endpoints](#15-global-search--public-endpoints)
 
 ### Compatibility paths
 
@@ -47,13 +54,16 @@ Content-Type: application/json
 
 | Module | Endpoint | Admin | Manager | Compliance | Analyst | CSR | Auditor |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Auth** | Login | Public | Public | Public | Public | Public | Public |
-| **Auth** | Logout / Profile | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Auth** | Login / 2FA Challenge | Public | Public | Public | Public | Public | Public |
+| **Auth** | Logout / Current Profile | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Customers** | List / View | ✅ | ✅ (branch only) | ✅ (all) | ✅ | ✅ (branch only) | ✅ |
 | **Customers** | Create | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
 | **Customers** | Update (contact info) | ✅ | ✅ | ❌ | ❌ | ✅ (contact only) | ❌ |
 | **Customers** | Update (KYC / risk level) | ✅ | ✅ | ✅ (KYC only) | ❌ | ❌ | ❌ |
 | **Customers** | Delete | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **KYC Docs** | List / Metadata / Download | ✅ | ✅ (branch only) | ✅ (all) | ✅ | ✅ (branch only) | ✅ |
+| **KYC Docs** | Upload & Verify | ✅ | ✅ (branch only) | ✅ (all) | ❌ | ❌ | ❌ |
+| **KYC Docs** | Delete Document | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **Accounts** | List / View | ✅ | ✅ (branch only) | ✅ (flagged/high-risk) | ✅ | ✅ (branch only) | ✅ |
 | **Accounts** | Open | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
 | **Accounts** | Update / Close (Delete) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -66,14 +76,27 @@ Content-Type: application/json
 | **Loans** | Approve Loan | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Alerts** | List / View | ✅ | ✅ (branch only) | ✅ (all) | ✅ (risk-related) | ✅ (customer-related, branch) | ✅ |
 | **Alerts** | Assign / Resolve | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **SAR Filings** | List / View | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **SAR Filings** | Create (File SAR) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **Branches** | List | ✅ | ✅ (own branch only) | ✅ | ✅ | ✅ (own branch only) | ✅ |
 | **Branches** | View (single) | ✅ | ✅ (own branch only) | ✅ | ✅ | ✅ (own branch only) | ✅ |
 | **Branches** | Create / Update / Delete | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **Users / Staff** | List / View | ✅ | ✅ (branch staff only) | ✅ | ✅ | ❌ | ✅ |
+| **Users / Staff** | Eligible Relationship Managers | ✅ | ✅ (branch staff only) | ❌ | ❌ | ✅ (branch staff only) | ❌ |
 | **Users / Staff** | Create / Update / Delete | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Audit Logs** | View | ✅ | ✅ (branch staff logs) | ✅ (compliance-relevant) | ❌ | ❌ | ✅ |
-| **Dashboard** | Stats / Chart / Recent | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Dashboard** | Branch Performance Reports | ✅ | ✅ (own branch) | ✅ | ✅ | ❌ | ✅ |
+| **Audit Logs** | View List & Details | ✅ | ✅ (branch staff logs) | ✅ (compliance-relevant) | ❌ | ❌ | ✅ |
+| **Dashboard** | Stats / Chart / Recent / Risk | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Dashboard** | Analytical Reports | ✅ | ✅ (own branch) | ✅ | ✅ | ❌ | ✅ |
+| **Dashboard** | Auditor Investigation Stats & Report | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **Dashboard** | Layout (Get, Update, Reset) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Notifications** | List / Mark Read / Mark All Read | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Settings** | Profile / Password / Avatar | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Settings** | User Notifications & Preferences | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Settings** | Security: 2FA / Sessions / History | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Settings** | API Tokens Registry | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Settings** | System Configuration & Health | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Search** | Grouped Search Bridge | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Public** | Published Interest Rates | Public | Public | Public | Public | Public | Public |
 
 ---
 
