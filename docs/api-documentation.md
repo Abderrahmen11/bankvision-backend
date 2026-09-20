@@ -457,24 +457,6 @@ List all accounts belonging to a customer.
 
 - **Role**: All authenticated roles
 
-**Response (`200 OK`):**
-```json
-{
-  "data": [
-    {
-      "id": 4,
-      "account_number": "ACC-2026-00004",
-      "account_type": "savings",
-      "currency": "USD",
-      "balance": "14500.00",
-      "status": "active",
-      "interest_rate": "2.50",
-      "opened_date": "2026-02-01"
-    }
-  ]
-}
-```
-
 ---
 
 ### `GET /api/customers/{id}/loans`
@@ -482,50 +464,48 @@ List all loans belonging to a customer.
 
 - **Role**: All authenticated roles
 
-**Response (`200 OK`):**
-```json
-{
-  "data": [
-    {
-      "id": 2,
-      "loan_number": "LN-2026-00002",
-      "loan_type": "auto",
-      "principal_amount": "35000.00",
-      "outstanding_balance": "28450.00",
-      "interest_rate": "4.25",
-      "term_months": 60,
-      "status": "active",
-      "start_date": "2026-03-01",
-      "next_payment_date": "2026-09-01"
-    }
-  ]
-}
-```
-
 ---
 
 ### `GET /api/customers/{id}/transactions`
-List recent transactions for all accounts belonging to a customer.
+List transaction history across all accounts belonging to a customer.
 
 - **Role**: All authenticated roles
-- **Query Parameters**:
-  - `page` (`integer`, optional): Page number (default: 1)
-  - `per_page` (`integer`, optional): Results per page (default: 15)
+- **Query Parameters**: `page`, `per_page`
+
+---
+
+## 3. KYC Document Endpoints
+
+Documents are stored on private storage (`storage/app/private/kyc/{customer_id}/{uuid}.{ext}`). Direct public HTTP access is disallowed; all downloads are authenticated and permission-checked.
+
+### `GET /api/customers/{customer}/kyc-documents`
+List all KYC verification documents uploaded for a specific customer.
+
+- **Role**: `admin`, `compliance`, `analyst`, `auditor` (all); `manager`, `csr` (assigned branch only)
 
 **Response (`200 OK`):**
 ```json
 {
   "data": [
     {
-      "id": 101,
-      "reference_number": "TXN-2026-00101",
-      "account_id": 4,
-      "transaction_type": "deposit",
-      "amount": "1200.00",
-      "status": "completed",
-      "channel": "online",
-      "description": "Salary deposit",
-      "transaction_date": "2026-08-20 09:30:00"
+      "id": 1,
+      "customer_id": 10,
+      "document_type": "passport",
+      "document_number": "A12345678",
+      "issuing_country": "United States",
+      "expiry_date": "2030-05-15",
+      "file_name": "passport_scan.pdf",
+      "file_size": 245100,
+      "mime_type": "application/pdf",
+      "status": "verified",
+      "notes": "Verified against state identity database",
+      "uploaded_at": "2026-09-18 10:20:00",
+      "verified_at": "2026-09-18 10:20:00",
+      "uploaded_by": {
+        "id": 2,
+        "name": "James Smith",
+        "role": "manager"
+      }
     }
   ]
 }
@@ -533,7 +513,76 @@ List recent transactions for all accounts belonging to a customer.
 
 ---
 
-## 3. Account Endpoints
+### `POST /api/customers/{customer}/kyc-documents`
+Upload and verify a customer identity document. Updates customer `kyc_status` to `verified` and creates an audit entry `kyc.document.uploaded`.
+
+- **Role**: `admin`, `compliance`, `manager` (assigned branch)
+- **Headers**: `Content-Type: multipart/form-data`
+
+**Validation Rules:**
+| Field | Type | Rules | Description |
+| :--- | :--- | :--- | :--- |
+| `document_type` | `string` | `required`, `max:50` | e.g. `passport`, `national_id`, `driving_license` |
+| `document_number` | `string` | `required`, `max:100` | ID / Document number |
+| `issuing_country` | `string` | `nullable`, `max:100` | Country of issuance |
+| `expiry_date` | `date` | `nullable`, `date` | Document expiration date |
+| `file` | `file` | `required`, `mimes:jpg,jpeg,png,pdf`, `max:10240` | File upload (max 10MB) |
+| `attestation` | `boolean` | `required`, `accepted` | Confirmation checkbox |
+| `notes` | `string` | `nullable`, `max:1000` | Staff verification notes |
+
+**Response (`201 Created`):**
+```json
+{
+  "success": true,
+  "message": "KYC document uploaded and verified successfully.",
+  "data": {
+    "id": 2,
+    "document_type": "national_id",
+    "document_number": "ID-987654321",
+    "status": "verified",
+    "file_name": "id_card.jpg"
+  },
+  "customer": {
+    "id": 10,
+    "kyc_status": "verified",
+    "document_count": 2
+  }
+}
+```
+
+---
+
+### `GET /api/kyc-documents/{id}`
+Retrieve metadata for a single KYC document.
+
+- **Role**: `admin`, `compliance`, `analyst`, `auditor` (all); `manager`, `csr` (assigned branch)
+
+---
+
+### `GET /api/kyc-documents/{id}/download`
+Stream-download the binary file from private storage with verified MIME type.
+
+- **Role**: `admin`, `compliance`, `analyst`, `auditor` (all); `manager`, `csr` (assigned branch)
+- **Response**: Binary file stream with `Content-Disposition: attachment; filename="..."`
+
+---
+
+### `DELETE /api/kyc-documents/{id}`
+Permanently delete the document record and remove the physical file from private disk.
+
+- **Role**: `admin` only
+
+**Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "message": "KYC document deleted successfully."
+}
+```
+
+---
+
+## 4. Account Endpoints
 
 ### `GET /api/accounts`
 List paginated bank accounts with optional filters.
