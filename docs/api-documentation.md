@@ -316,18 +316,17 @@ List paginated customers with optional search and filtering.
 
 - **Role**: All authenticated roles
 - **Scoping**:
-  - `admin`, `auditor`, `analyst`: See all customers bank-wide.
-  - `compliance`: Sees all customers bank-wide (for KYC/risk review).
-  - `manager`, `csr`: Sees only customers in their assigned branch (`branch_id`).
+  - `admin`, `auditor`, `analyst`, `compliance`: Bank-wide.
+  - `manager`, `csr`: Scoped to assigned `branch_id`.
 - **Query Parameters**:
   - `page` (`integer`, optional): Page number (default: 1)
   - `per_page` (`integer`, optional): Results per page (default: 15)
-  - `search` (`string`, optional): Search by full name, email, phone, or customer number
+  - `search` (`string`, optional): Search by name, email, phone, or customer number
   - `type` (`string`, optional): `premium`, `regular`, `business`
   - `kyc_status` (`string`, optional): `verified`, `pending`, `expired`
   - `risk_level` (`string`, optional): `low`, `medium`, `high`
-  - `branch_id` (`integer`, optional): Filter by branch (admin/auditor/compliance only)
-  - `sort_by` (`string`, optional): Column to sort by (default: `created_at`)
+  - `branch_id` (`integer`, optional): Filter by branch (admin, auditor, compliance only)
+  - `sort_by` (`string`, optional): Sort field (default: `created_at`)
   - `sort_direction` (`string`, optional): `asc` or `desc`
 
 **Response (`200 OK`):**
@@ -348,6 +347,7 @@ List paginated customers with optional search and filtering.
       "registration_date": "2026-01-15",
       "accounts_count": 2,
       "loans_count": 1,
+      "document_count": 3,
       "branch": {
         "id": 1,
         "branch_code": "BR001",
@@ -360,18 +360,10 @@ List paginated customers with optional search and filtering.
       }
     }
   ],
-  "links": {
-    "first": "http://localhost:8000/api/customers?page=1",
-    "last": "http://localhost:8000/api/customers?page=5",
-    "prev": null,
-    "next": "http://localhost:8000/api/customers?page=2"
-  },
   "meta": {
     "current_page": 1,
-    "from": 1,
     "last_page": 5,
     "per_page": 15,
-    "to": 15,
     "total": 65
   }
 }
@@ -400,21 +392,6 @@ Create a new customer profile.
 | `branch_id` | `integer` | `required`, `exists:branches,id` | Assigned branch |
 | `relationship_manager_id`| `integer` | `nullable`, `exists:users,id` | Assigned staff manager |
 
-**Request Example:**
-```json
-{
-  "full_name": "Jane Wilson",
-  "email": "jane.wilson@example.com",
-  "phone": "+1-555-0812",
-  "address": "742 Evergreen Terrace",
-  "city": "Metropolis",
-  "customer_type": "regular",
-  "branch_id": 1,
-  "kyc_status": "pending",
-  "risk_level": "low"
-}
-```
-
 **Response (`201 Created`):**
 ```json
 {
@@ -429,7 +406,7 @@ Create a new customer profile.
     "customer_type": "regular",
     "kyc_status": "pending",
     "risk_level": "low",
-    "registration_date": "2026-08-23"
+    "registration_date": "2026-09-19"
   }
 }
 ```
@@ -437,33 +414,9 @@ Create a new customer profile.
 ---
 
 ### `GET /api/customers/{id}`
-Retrieve detailed information for a single customer.
+Retrieve single customer profile with accounts, loans, and branch details.
 
-- **Role**: All authenticated roles
-
-**Response (`200 OK`):**
-```json
-{
-  "data": {
-    "id": 11,
-    "customer_number": "CUST-2026-00011",
-    "full_name": "Jane Wilson",
-    "email": "jane.wilson@example.com",
-    "phone": "+1-555-0812",
-    "address": "742 Evergreen Terrace",
-    "city": "Metropolis",
-    "customer_type": "regular",
-    "kyc_status": "pending",
-    "risk_level": "low",
-    "registration_date": "2026-08-23",
-    "branch": {
-      "id": 1,
-      "branch_code": "BR001",
-      "branch_name": "Main Downtown Branch"
-    }
-  }
-}
-```
+- **Role**: All authenticated roles (branch-scoped for manager/csr)
 
 ---
 
@@ -474,11 +427,7 @@ Update an existing customer record.
 - **Permission rules by role**:
   - `admin`, `manager`: Can update all fields including `kyc_status`, `risk_level`, and personal info.
   - `csr`: Can update contact fields only (`phone`, `address`, `city`). Attempting to update `kyc_status` or `risk_level` returns `403 Forbidden`.
-  - `compliance`: Can update `kyc_status` only. Attempting to update personal details (`full_name`, `email`, `phone`, `address`, `city`) returns `403 Forbidden`.
-
-> [!CAUTION]
-> **CSR** cannot update `kyc_status` or `risk_level` — returns `403 Forbidden`.
-> **Compliance** cannot edit personal customer info — returns `403 Forbidden`.
+  - `compliance`: Can update `kyc_status` only. Attempting to update personal details returns `403 Forbidden`.
 
 **Validation Rules:**
 | Field | Type | Rules | Roles Allowed |
@@ -494,32 +443,12 @@ Update an existing customer record.
 | `branch_id` | `integer` | `sometimes`, `exists:branches,id` | `admin` |
 | `relationship_manager_id`| `integer` | `nullable`, `exists:users,id` | `admin`, `manager` |
 
-**Response (`200 OK`):**
-```json
-{
-  "success": true,
-  "message": "Customer updated successfully.",
-  "data": {
-    "id": 11,
-    "kyc_status": "verified"
-  }
-}
-```
-
 ---
 
 ### `DELETE /api/customers/{id}`
-Delete a customer. Cannot be deleted if customer has accounts with balance > 0 or outstanding active loans.
+Delete a customer. Cannot be deleted if the customer has accounts with balance > 0 or outstanding active loans.
 
 - **Role**: `admin`
-
-**Response (`200 OK`):**
-```json
-{
-  "success": true,
-  "message": "Customer deleted successfully."
-}
-```
 
 ---
 
