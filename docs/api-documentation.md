@@ -742,56 +742,20 @@ List paginated loans with optional filtering.
 ---
 
 ### `POST /api/loans`
-Submit a new loan application. New loans are created with `pending` status.
+Submit a new loan application. Created with `pending` status.
 
 - **Role**: `admin`, `manager`
-- **Scoping**: `manager` can only submit loan applications for customers in their assigned branch.
-
-> [!CAUTION]
-> **CSR** cannot submit loan applications — returns `403 Forbidden`.
+- **Scoping**: `manager` can only submit loans for customers in their assigned branch.
 
 **Validation Rules:**
 | Field | Type | Rules | Description |
 | :--- | :--- | :--- | :--- |
 | `customer_id` | `integer` | `required`, `exists:customers,id` | Applicant customer |
-| `loan_type` | `string` | `required`, `in:mortgage,personal,auto,business` | Type of loan |
-| `principal_amount` | `numeric`| `required`, `min:1`, `max:999999999.99` | Principal requested |
-| `interest_rate` | `numeric` | `required`, `min:0`, `max:100` | Annual interest rate % |
-| `term_months` | `integer` | `required`, `min:1`, `max:480` | Loan term in months |
-| `start_date` | `date` | `required`, `date` | Effective start date |
-
-**Request Example:**
-```json
-{
-  "customer_id": 10,
-  "loan_type": "personal",
-  "principal_amount": 15000.00,
-  "interest_rate": 6.50,
-  "term_months": 36,
-  "start_date": "2026-09-01"
-}
-```
-
-**Response (`201 Created`):**
-```json
-{
-  "success": true,
-  "message": "Loan application submitted successfully.",
-  "data": {
-    "id": 18,
-    "loan_number": "LN-2026-00018",
-    "customer_id": 10,
-    "loan_type": "personal",
-    "principal_amount": "15000.00",
-    "outstanding_balance": "15000.00",
-    "interest_rate": "6.50",
-    "term_months": 36,
-    "status": "pending",
-    "start_date": "2026-09-01",
-    "next_payment_date": "2026-10-01"
-  }
-}
-```
+| `loan_type` | `string` | `required`, `in:mortgage,personal,auto,business` | Type |
+| `principal_amount` | `numeric`| `required`, `min:1`, `max:999999999.99` | Principal |
+| `interest_rate` | `numeric` | `required`, `min:0`, `max:100` | Rate % |
+| `term_months` | `integer` | `required`, `min:1`, `max:480` | Term |
+| `start_date` | `date` | `required`, `date` | Start date |
 
 ---
 
@@ -804,15 +768,10 @@ Retrieve single loan details.
 
 ### `PUT /api/loans/{id}`
 Update loan balance, payment schedule, or status.
-- Setting `outstanding_balance` to `0` automatically transitions status to `completed`.
-- Transitioning status to `delinquent` or `defaulted` generates a high-priority compliance alert.
+- Transitioning status to `delinquent` or `defaulted` automatically creates a compliance alert.
 - Valid status transitions: `pending → active`, `active → delinquent`, `delinquent → defaulted`, `defaulted → completed`. Invalid transitions return `422`.
-- Completed loans cannot be modified.
 
 - **Role**: `admin`, `manager`
-
-> [!CAUTION]
-> **CSR** cannot update loans — returns `403 Forbidden`.
 
 **Validation Rules:**
 | Field | Type | Rules |
