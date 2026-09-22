@@ -98,7 +98,7 @@ class AlertFactory extends Factory
             'alertable_id'   => $alertableId,
             'assigned_to'    => function (array $attributes) {
                 // 30% chance unassigned
-                if (fake()->boolean(30)) {
+                if ($this->faker->boolean(30)) {
                     return null;
                 }
 

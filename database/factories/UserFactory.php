@@ -50,16 +50,16 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'name'              => fake()->name(),
-            'email'             => fake()->unique()->safeEmail(),
+            'name'              => $this->faker->name(),
+            'email'             => $this->faker->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password'          => static::$password ??= Hash::make('password'),
             'remember_token'    => Str::random(10),
             'role'              => $this->weightedRandom(self::ROLE_WEIGHTS),
             'status'            => $this->weightedRandom(self::STATUS_WEIGHTS),
             'branch_id'         => Branch::inRandomOrder()->first()?->id ?? Branch::factory(),
-            'last_login_at'     => fake()->optional(0.8)->dateTimeThisYear(),
-            'phone'             => fake()->phoneNumber(),
+            'last_login_at'     => $this->faker->optional(0.8)->dateTimeThisYear(),
+            'phone'             => $this->faker->phoneNumber(),
         ];
     }
 
