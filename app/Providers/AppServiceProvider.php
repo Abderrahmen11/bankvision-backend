@@ -18,6 +18,8 @@ use App\Policies\KycDocumentPolicy;
 use App\Policies\TransactionPolicy;
 use App\Observers\ModelAuditObserver;
 use App\Services\AuditService;
+use Faker\Factory as FakerFactory;
+use Faker\Generator as FakerGenerator;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -32,7 +34,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Bind Faker\Generator so Factory::withFaker() never returns null,
+        // regardless of environment (local, production, testing, tinker, etc.).
+        $this->app->singleton(FakerGenerator::class, function () {
+            return FakerFactory::create(config('app.faker_locale', 'en_US'));
+        });
     }
 
     /**
