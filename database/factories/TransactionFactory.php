@@ -67,7 +67,7 @@ class TransactionFactory extends Factory
         $year = $transactionDate->format('Y');
 
         return [
-            'transaction_number' => 'TXN-' . $year . '-' . $this->faker->unique()->numerify('######'),
+            'transaction_number' => 'TXN-' . $year . '-' . str_pad($this->faker->unique()->numberBetween(1, 9999999), 7, '0', STR_PAD_LEFT),
             'account_id'         => Account::inRandomOrder()->first()?->id ?? Account::factory(),
             'transaction_type'   => $type,
             'amount'             => $amount,
