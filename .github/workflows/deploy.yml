@@ -1,0 +1,35 @@
+name: Deploy Laravel to Azure
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo, pdo_mysql, bcmath, openssl, tokenizer, xml, ctype, json, fileinfo
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+
+      - name: Prepare directories
+        run: |
+          mkdir -p storage/framework/cache
+          mkdir -p storage/framework/sessions
+          mkdir -p storage/framework/views
+          mkdir -p storage/logs
+          mkdir -p bootstrap/cache
+
+      - name: Deploy to Azure
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: bankvision
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .
