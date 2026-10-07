@@ -1,59 +1,191 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# BankVision — Backend API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A RESTful API powering the BankVision banking management platform, built with **Laravel 12** and secured with **Laravel Sanctum** token authentication.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Overview
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+BankVision Backend is a multi-role banking operations API that serves a React SPA. It handles core banking entities (customers, accounts, transactions, loans), compliance workflows (KYC, AML alerts, SAR filings), and a configurable analytics dashboard — all protected by fine-grained role-based access control.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+---
 
-## Learning Laravel
+## Tech Stack
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+| Layer | Technology |
+|---|---|
+| Framework | Laravel 12 (PHP 8.2+) |
+| Authentication | Laravel Sanctum (API tokens + 2FA) |
+| Database | SQLite (dev) / MySQL (prod-ready) |
+| Testing | PHPUnit 11 |
+| Code Style | Laravel Pint |
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-## Laravel Sponsors
+## Features
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Core Banking
+- **Customers** — full lifecycle management with KYC document upload, verification, and secure download
+- **Accounts** — multi-type accounts (checking, savings, etc.) linked to customers and branches
+- **Transactions** — record, approve, and flag transactions; high-value threshold detection
+- **Loans** — creation, approval workflow, and lifecycle tracking
 
-### Premium Partners
+### Compliance & Risk
+- **Alerts** — automated alert generation, assignment, and resolution workflow
+- **AML / SAR Filings** — Suspicious Activity Report management for compliance officers
+- **KYC Queue** — document-based customer identity verification workflow
+- **Audit Logs** — immutable, queryable log of all system actions
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### Security
+- **Two-Factor Authentication (2FA)** — per-user TOTP-based login challenge with resend support
+- **Session Management** — view active sessions, revoke individual or all sessions
+- **Login History** — full login activity log per user
+- **API Token Management** — admin-scoped personal access token registry
 
-## Contributing
+### Dashboard & Analytics
+- **Role-Based Dashboards** — each role (Admin, Manager, Compliance, Analyst, CSR, Auditor) receives a tailored dashboard view
+- **Customizable Layouts** — per-user drag-and-resize widget layout, persisted server-side
+- **Reports & Risk Analysis** — financial metrics, transaction volume, risk indicators
+- **Audit Investigation Dashboard** — dedicated stats for auditors
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### System
+- **Branch Management** — multi-branch support with manager assignments
+- **User Management** — staff accounts with role assignment
+- **System Settings** — configurable banking thresholds and interest rates (admin-only)
+- **In-App Notifications** — bell-icon notification feed with mark-read support
+- **Global Search** — cross-entity search across customers, accounts, transactions, and more
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Role-Based Access Control
 
-## Security Vulnerabilities
+The API enforces role restrictions at the route level using a custom `role` middleware. The available roles are:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+| Role | Description |
+|---|---|
+| `admin` | Full system access including user management and system config |
+| `manager` | Branch operations, loan approvals, transaction approvals |
+| `compliance` | AML/SAR management, customer updates, alert resolution |
+| `analyst` | Read-only analytics and reporting access |
+| `csr` | Customer service — customer/account/transaction creation |
+| `auditor` | Audit log access and investigation dashboards |
+
+---
+
+## Project Structure
+
+```
+app/
+├── Http/
+│   ├── Controllers/Api/   # 19 API controllers
+│   ├── Middleware/        # Auth, role, throttle middleware
+│   └── Requests/          # Form request validation classes
+├── Models/                # Eloquent models (User, Customer, Account, Transaction, Loan, …)
+├── Services/              # Business logic layer (15 service classes)
+├── Policies/              # Authorization policies
+├── Observers/             # Model event observers
+└── Enums/                 # Typed PHP enums
+
+database/
+├── migrations/            # 21 timestamped migrations
+├── factories/             # Model factories for testing/seeding
+└── seeders/               # Database seeders
+
+routes/
+└── api.php                # All API route definitions (~290 lines, grouped by resource)
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- PHP 8.2+
+- Composer
+- Node.js & npm (for Vite asset compilation)
+
+### Installation
+
+```bash
+# 1. Install PHP dependencies
+composer install
+
+# 2. Copy the environment file and configure it
+cp .env.example .env
+
+# 3. Generate the application key
+php artisan key:generate
+
+# 4. Run database migrations
+php artisan migrate
+
+# 5. (Optional) Seed the database with sample data
+php artisan db:seed
+```
+
+### Running the Development Server
+
+```bash
+# Start API server on http://localhost:8000
+php artisan serve
+
+# Or run all services concurrently (server + queue + log watcher)
+composer run dev
+```
+
+### Running Tests
+
+```bash
+composer run test
+# or
+php artisan test
+```
+
+---
+
+## Environment Configuration
+
+Copy `.env.example` to `.env` and configure the following key variables:
+
+```env
+# Database (SQLite by default; switch to MySQL for production)
+DB_CONNECTION=sqlite
+
+# Banking business logic thresholds
+BANKING_HIGH_VALUE_THRESHOLD=10000      # Transactions above this trigger alerts
+BANKING_EST_FEE_INCOME_RATE=0.005
+BANKING_EST_OPERATING_COST_RATIO=0.35
+BANKING_EST_CORPORATE_TAX_RATE=0.21
+# ... (see .env.example for the full list)
+```
+
+---
+
+## API Overview
+
+All endpoints are prefixed with `/api`. Protected routes require a `Bearer` token in the `Authorization` header (issued on login).
+
+| Resource | Endpoints |
+|---|---|
+| Auth | `POST /login`, `POST /login/2fa`, `POST /logout`, `GET /user` |
+| Dashboard | `GET /dashboard/stats`, `/chart-data`, `/recent-activity`, `/risk-analysis` |
+| Customers | `GET/POST /customers`, `GET/PUT/DELETE /customers/{id}` |
+| KYC Docs | `POST/GET /customers/{id}/kyc-documents`, `GET/DELETE /kyc-documents/{id}` |
+| Accounts | `GET/POST /accounts`, `GET/PUT/DELETE /accounts/{id}` |
+| Transactions | `GET/POST /transactions`, `POST /transactions/{id}/approve`, `/flag` |
+| Loans | `GET/POST /loans`, `GET/PUT /loans/{id}`, `POST /loans/{id}/approve` |
+| Alerts | `GET /alerts`, `POST /alerts/{id}/resolve`, `/assign` |
+| SAR Filings | `GET/POST /sar-filings` |
+| Audit Logs | `GET /audit-logs`, `GET /audit-logs/{id}` |
+| Branches | `GET/POST /branches`, `GET/PUT/DELETE /branches/{id}` |
+| Users | `GET/POST /users`, `GET/PUT/DELETE /users/{id}` |
+| Settings | `PUT /settings/profile`, `/security/2fa`, `GET /settings/system` |
+| Notifications | `GET /notifications`, `POST /notifications/{id}/read` |
+| Search | `GET /search` |
+
+---
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+MIT
